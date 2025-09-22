@@ -16,7 +16,7 @@ import { FlatGrid } from 'react-native-super-grid';
 import { router } from 'expo-router';
 import Modal from 'react-native-modal';
 
-import { getUserDayPlans, getSavedReels } from '../../services/api';
+import { getUserDayPlans, getSavedReels } from '../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
