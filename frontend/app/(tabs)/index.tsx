@@ -6,20 +6,22 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   Dimensions,
   Platform,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { FlashList } from '@shopify/flash-list';
+import { LinearGradient } from 'expo-linear-gradient';
 import Modal from 'react-native-modal';
 import Toast from 'react-native-toast-message';
 
-import { fetchReels, upvoteReel, saveReel } from '../../services/api';
+import { fetchReels, upvoteReel, saveReel, trackEvent } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/Colors';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -38,36 +40,60 @@ interface Reel {
   saves: number;
 }
 
-// City selection modal component
+// City selection modal component with search
 const CitySelectionModal: React.FC<{
   isVisible: boolean;
   onClose: () => void;
   onSelect: (city: string) => void;
   currentCity: string;
 }> = ({ isVisible, onClose, onSelect, currentCity }) => {
+  const [searchText, setSearchText] = useState('');
+  
   const popularCities = [
     'Delhi', 'Mumbai', 'Bangalore', 'Chennai', 'Kolkata', 'Hyderabad',
     'Pune', 'Ahmedabad', 'Jaipur', 'Surat', 'Lucknow', 'Kanpur',
-    'Nagpur', 'Indore', 'Thane', 'Bhopal', 'Visakhapatnam', 'Pimpri-Chinchwad'
+    'Nagpur', 'Indore', 'Thane', 'Bhopal', 'Visakhapatnam', 'Pimpri-Chinchwad',
+    'Goa', 'Udaipur', 'Jodhpur', 'Varanasi', 'Rishikesh', 'Manali'
   ];
+
+  const filteredCities = popularCities.filter(city =>
+    city.toLowerCase().includes(searchText.toLowerCase())
+  );
 
   return (
     <Modal
       isVisible={isVisible}
       onBackdropPress={onClose}
       style={styles.modal}
-      backdropOpacity={0.5}
+      backdropOpacity={0.6}
+      animationIn="slideInUp"
+      animationOut="slideOutDown"
     >
-      <View style={styles.modalContent}>
+      <LinearGradient
+        colors={[Colors.backgroundSecondary, Colors.backgroundTertiary]}
+        style={styles.modalContent}
+      >
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Select City</Text>
+          <Text style={[styles.modalTitle, Typography.h3]}>Select City</Text>
           <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color="#ffffff" />
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
         </View>
+
+        {/* Search Input */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color={Colors.primary} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search cities..."
+            placeholderTextColor={Colors.textMuted}
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+        </View>
         
-        <ScrollView style={styles.citiesList}>
-          {popularCities.map((city) => (
+        <ScrollView style={styles.citiesList} showsVerticalScrollIndicator={false}>
+          {filteredCities.map((city) => (
             <TouchableOpacity
               key={city}
               style={[
@@ -77,8 +103,10 @@ const CitySelectionModal: React.FC<{
               onPress={() => {
                 onSelect(city);
                 onClose();
+                trackEvent('city_selected', { city });
               }}
             >
+              <Ionicons name="location" size={16} color={currentCity === city ? Colors.primary : Colors.textMuted} />
               <Text style={[
                 styles.cityText,
                 currentCity === city && styles.selectedCityText
@@ -86,17 +114,17 @@ const CitySelectionModal: React.FC<{
                 {city}
               </Text>
               {currentCity === city && (
-                <Ionicons name="checkmark" size={20} color="#ff6b35" />
+                <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
               )}
             </TouchableOpacity>
           ))}
         </ScrollView>
-      </View>
+      </LinearGradient>
     </Modal>
   );
 };
 
-// Add to Plan Modal component
+// Add to Plan Modal component with enhanced design
 const AddToPlanModal: React.FC<{
   isVisible: boolean;
   onClose: () => void;
@@ -111,41 +139,58 @@ const AddToPlanModal: React.FC<{
       style={styles.bottomModal}
       swipeDirection="down"
       onSwipeComplete={onClose}
+      animationIn="slideInUp"
+      animationOut="slideOutDown"
     >
-      <View style={styles.bottomModalContent}>
-        <View style={styles.modalHandle} />
+      <LinearGradient
+        colors={[Colors.backgroundSecondary, Colors.backgroundTertiary]}
+        style={styles.bottomModalContent}
+      >
+        <View style={[styles.modalHandle, { backgroundColor: Colors.textMuted }]} />
         
-        <Text style={styles.bottomModalTitle}>Add to Day Plan</Text>
-        <Text style={styles.bottomModalSubtitle}>
+        <Text style={[styles.bottomModalTitle, Typography.h3]}>Add to Day Plan</Text>
+        <Text style={[styles.bottomModalSubtitle, Typography.body2]}>
           {reel?.title} • {reel?.location}
         </Text>
 
         <TouchableOpacity
           style={styles.planOption}
-          onPress={onAddToNewPlan}
+          onPress={() => {
+            onAddToNewPlan();
+            trackEvent('reel_add_to_plan', { reel_id: reel?.id, plan_type: 'new' });
+          }}
         >
-          <View style={styles.planOptionIcon}>
-            <Ionicons name="add-circle" size={24} color="#ff6b35" />
-          </View>
+          <LinearGradient
+            colors={[Colors.primary, Colors.primaryLight]}
+            style={styles.planOptionIcon}
+          >
+            <Ionicons name="add-circle" size={24} color={Colors.textPrimary} />
+          </LinearGradient>
           <View style={styles.planOptionContent}>
             <Text style={styles.planOptionTitle}>New Day Plan</Text>
             <Text style={styles.planOptionSubtitle}>Create a new plan for {reel?.location}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#8e8e93" />
+          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.planOption}
-          onPress={onAddToExistingPlan}
+          onPress={() => {
+            onAddToExistingPlan();
+            trackEvent('reel_add_to_plan', { reel_id: reel?.id, plan_type: 'existing' });
+          }}
         >
-          <View style={styles.planOptionIcon}>
-            <Ionicons name="calendar" size={24} color="#4CAF50" />
-          </View>
+          <LinearGradient
+            colors={[Colors.secondary, Colors.secondaryLight]}
+            style={styles.planOptionIcon}
+          >
+            <Ionicons name="calendar" size={24} color={Colors.textPrimary} />
+          </LinearGradient>
           <View style={styles.planOptionContent}>
             <Text style={styles.planOptionTitle}>Existing Plan</Text>
             <Text style={styles.planOptionSubtitle}>Add to upcoming plan</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#8e8e93" />
+          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -154,7 +199,7 @@ const AddToPlanModal: React.FC<{
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
     </Modal>
   );
 };
@@ -168,9 +213,14 @@ const LocationFilter: React.FC<{
 }> = ({ currentLocation, selectedItinerary, onLocationPress, onClearItinerary }) => (
   <View style={styles.filterContainer}>
     <TouchableOpacity style={styles.filterPill} onPress={onLocationPress}>
-      <Ionicons name="location" size={16} color="#ff6b35" />
-      <Text style={styles.filterText}>{currentLocation}</Text>
-      <Ionicons name="chevron-down" size={16} color="#ff6b35" />
+      <LinearGradient
+        colors={[Colors.primary, Colors.primaryLight]}
+        style={styles.filterGradient}
+      >
+        <Ionicons name="location" size={16} color={Colors.textPrimary} />
+        <Text style={styles.filterText}>{currentLocation}</Text>
+        <Ionicons name="chevron-down" size={16} color={Colors.textPrimary} />
+      </LinearGradient>
     </TouchableOpacity>
     
     {selectedItinerary && (
@@ -178,9 +228,14 @@ const LocationFilter: React.FC<{
         style={[styles.filterPill, styles.itineraryPill]}
         onPress={onClearItinerary}
       >
-        <Ionicons name="map" size={16} color="#4CAF50" />
-        <Text style={[styles.filterText, { color: '#4CAF50' }]}>My Plan</Text>
-        <Ionicons name="close" size={16} color="#4CAF50" />
+        <LinearGradient
+          colors={[Colors.success, Colors.successLight]}
+          style={styles.filterGradient}
+        >
+          <Ionicons name="map" size={16} color={Colors.textPrimary} />
+          <Text style={[styles.filterText, { color: Colors.textPrimary }]}>My Plan</Text>
+          <Ionicons name="close" size={16} color={Colors.textPrimary} />
+        </LinearGradient>
       </TouchableOpacity>
     )}
   </View>
@@ -195,106 +250,149 @@ const ReelCard: React.FC<{
   isSaving: boolean;
 }> = ({ reel, onUpvote, onSave, onAddToPlan, isUpvoting, isSaving }) => {
   return (
-    <View style={styles.reelCard}>
-      {/* Header */}
+    <View style={[styles.reelCard, Shadows.medium]}>
+      {/* Header with enhanced styling */}
       <View style={styles.reelHeader}>
         <View style={styles.reelInfo}>
-          <Text style={styles.reelTitle}>{reel.title}</Text>
+          <Text style={[styles.reelTitle, Typography.h4]}>{reel.title}</Text>
           <Text style={styles.reelLocation}>
-            <Ionicons name="location-outline" size={12} color="#8e8e93" />
+            <Ionicons name="location-outline" size={12} color={Colors.primary} />
             {' '}{reel.location}
           </Text>
         </View>
         <View style={styles.reelMeta}>
           {reel.creator_handle && (
-            <Text style={styles.creatorHandle}>{reel.creator_handle}</Text>
+            <LinearGradient
+              colors={[Colors.accent, Colors.accentLight]}
+              style={styles.creatorBadge}
+            >
+              <Text style={styles.creatorHandle}>{reel.creator_handle}</Text>
+            </LinearGradient>
           )}
         </View>
       </View>
 
-      {/* Chips */}
+      {/* Enhanced Chips */}
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}
         style={styles.chipsContainer}
       >
-        <View style={[styles.chip, { backgroundColor: reel.type === 'Food' ? '#ff6b35' : '#4CAF50' }]}>
+        <LinearGradient
+          colors={reel.type === 'Food' ? [Colors.food, '#FF8F00'] : [Colors.place, '#00E676']}
+          style={styles.chip}
+        >
+          <Ionicons 
+            name={reel.type === 'Food' ? 'restaurant' : 'location'} 
+            size={12} 
+            color={Colors.textPrimary} 
+          />
           <Text style={styles.chipText}>{reel.type}</Text>
-        </View>
+        </LinearGradient>
+        
         {reel.metadata.price && (
-          <View style={styles.chip}>
+          <View style={[styles.chip, { backgroundColor: Colors.backgroundAccent }]}>
+            <Ionicons name="card" size={12} color={Colors.accent} />
             <Text style={styles.chipText}>{reel.metadata.price}</Text>
           </View>
         )}
         {reel.metadata.hygiene && (
-          <View style={styles.chip}>
+          <View style={[styles.chip, { backgroundColor: Colors.backgroundAccent }]}>
+            <Ionicons name="shield-checkmark" size={12} color={Colors.success} />
             <Text style={styles.chipText}>{reel.metadata.hygiene}</Text>
           </View>
         )}
-        {reel.metadata.vibe && (
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{reel.metadata.vibe}</Text>
-          </View>
-        )}
         {reel.metadata.timing && (
-          <View style={styles.chip}>
+          <View style={[styles.chip, { backgroundColor: Colors.backgroundAccent }]}>
+            <Ionicons name="time" size={12} color={Colors.secondary} />
             <Text style={styles.chipText}>{reel.metadata.timing}</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Native Reel Display - Instagram Style */}
+      {/* Enhanced Native Reel Display */}
       <View style={styles.reelDisplay}>
-        <View style={styles.reelVideoPlaceholder}>
-          <View style={styles.playIconContainer}>
-            <Ionicons name="play-circle" size={64} color="rgba(255, 255, 255, 0.9)" />
-          </View>
-          <View style={styles.reelOverlay}>
-            <Text style={styles.reelTitleLarge}>{reel.title}</Text>
+        <LinearGradient
+          colors={['#FF408150', '#00BCD450']}
+          style={styles.reelVideoPlaceholder}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <TouchableOpacity style={styles.playIconContainer}>
+            <LinearGradient
+              colors={[Colors.primary, Colors.primaryLight]}
+              style={styles.playButton}
+            >
+              <Ionicons name="play" size={32} color={Colors.textPrimary} />
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.8)']}
+            style={styles.reelOverlay}
+          >
+            <Text style={[styles.reelTitleLarge, Typography.h4]}>{reel.title}</Text>
             {reel.description && (
-              <Text style={styles.reelDescription} numberOfLines={2}>
+              <Text style={[styles.reelDescription, Typography.body2]} numberOfLines={2}>
                 {reel.description}
               </Text>
             )}
             <View style={styles.reelMetaRow}>
               <TouchableOpacity style={styles.instagramLinkButton}>
-                <Ionicons name="logo-instagram" size={14} color="#ff6b35" />
+                <LinearGradient
+                  colors={['#E1306C', '#F77737']}
+                  style={styles.instagramGradient}
+                >
+                  <Ionicons name="logo-instagram" size={14} color={Colors.textPrimary} />
+                </LinearGradient>
                 <Text style={styles.instagramLink}>View on Instagram</Text>
               </TouchableOpacity>
-              <Text style={styles.reelStats}>
-                {reel.upvotes} likes
-              </Text>
+              <View style={styles.reelStatsContainer}>
+                <Ionicons name="heart" size={12} color={Colors.primary} />
+                <Text style={styles.reelStats}>{reel.upvotes} likes</Text>
+              </View>
             </View>
-          </View>
-        </View>
+          </LinearGradient>
+        </LinearGradient>
       </View>
 
-      {/* Actions */}
+      {/* Enhanced Actions */}
       <View style={styles.actionsContainer}>
         <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => onUpvote(reel.id)}
+          style={[styles.actionButton, { backgroundColor: isUpvoting ? Colors.primaryLight : Colors.backgroundAccent }]}
+          onPress={() => {
+            onUpvote(reel.id);
+            trackEvent('reel_upvote', { reel_id: reel.id });
+          }}
           disabled={isUpvoting}
         >
-          <Ionicons name="thumbs-up" size={20} color="#ff6b35" />
+          <Ionicons name="thumbs-up" size={20} color={Colors.primary} />
           <Text style={styles.actionText}>{reel.upvotes}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => onSave(reel.id)}
+          style={[styles.actionButton, { backgroundColor: isSaving ? Colors.accentLight : Colors.backgroundAccent }]}
+          onPress={() => {
+            onSave(reel.id);
+            trackEvent('reel_saved', { reel_id: reel.id });
+          }}
           disabled={isSaving}
         >
-          <Ionicons name="bookmark" size={20} color="#ff6b35" />
+          <Ionicons name="bookmark" size={20} color={Colors.accent} />
           <Text style={styles.actionText}>Save</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.actionButton, styles.addButton]}
+          style={styles.addButton}
           onPress={() => onAddToPlan(reel)}
         >
-          <Ionicons name="add-circle" size={20} color="#ffffff" />
-          <Text style={[styles.actionText, { color: '#ffffff' }]}>Add to Plan</Text>
+          <LinearGradient
+            colors={[Colors.primary, Colors.primaryLight]}
+            style={styles.addButtonGradient}
+          >
+            <Ionicons name="add-circle" size={20} color={Colors.textPrimary} />
+            <Text style={[styles.actionText, { color: Colors.textPrimary }]}>Add to Plan</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </View>
@@ -306,13 +404,23 @@ const EmptyState: React.FC<{
   onRefresh: () => void;
 }> = ({ currentLocation, onRefresh }) => (
   <View style={styles.emptyState}>
-    <Ionicons name="location-outline" size={64} color="#8e8e93" />
-    <Text style={styles.emptyTitle}>Discovering {currentLocation}</Text>
-    <Text style={styles.emptySubtitle}>
+    <LinearGradient
+      colors={[Colors.primary + '30', Colors.secondary + '30']}
+      style={styles.emptyIconContainer}
+    >
+      <Ionicons name="location-outline" size={64} color={Colors.primary} />
+    </LinearGradient>
+    <Text style={[styles.emptyTitle, Typography.h3]}>Discovering {currentLocation}</Text>
+    <Text style={[styles.emptySubtitle, Typography.body2]}>
       We're curating fresh reels for your city. Try another location or check back soon!
     </Text>
     <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-      <Text style={styles.retryText}>Refresh</Text>
+      <LinearGradient
+        colors={[Colors.primary, Colors.primaryLight]}
+        style={styles.retryButtonGradient}
+      >
+        <Text style={styles.retryText}>Refresh</Text>
+      </LinearGradient>
     </TouchableOpacity>
   </View>
 );
@@ -338,6 +446,9 @@ const DiscoverScreen: React.FC = () => {
     queryKey: ['reels', currentLocation, selectedItinerary],
     queryFn: () => fetchReels({ location: currentLocation }),
     enabled: !!currentLocation,
+    onSuccess: () => {
+      trackEvent('discover_impression', { location: currentLocation, count: reels.length });
+    },
   });
 
   const upvoteMutation = useMutation({
@@ -346,7 +457,7 @@ const DiscoverScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['reels'] });
       Toast.show({
         type: 'success',
-        text1: 'Upvoted!',
+        text1: 'Upvoted! 👍',
         text2: 'Thanks for your feedback',
       });
     },
@@ -355,9 +466,10 @@ const DiscoverScreen: React.FC = () => {
   const saveMutation = useMutation({
     mutationFn: ({ reelId }: { reelId: string }) => saveReel(reelId, user?.id || 'anonymous'),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['savedReels'] });
       Toast.show({
         type: 'success',
-        text1: 'Saved!',
+        text1: 'Saved! 🔖',
         text2: 'Reel saved to your favorites',
       });
     },
@@ -366,6 +478,7 @@ const DiscoverScreen: React.FC = () => {
   // Get location permission - effect after all hooks
   useEffect(() => {
     getLocationPermission();
+    trackEvent('screen_view', { screen: 'discover' });
   }, []);
 
   const getLocationPermission = async () => {
@@ -402,7 +515,7 @@ const DiscoverScreen: React.FC = () => {
     if (!user) {
       Toast.show({
         type: 'error',
-        text1: 'Login Required',
+        text1: 'Login Required 🔐',
         text2: 'Please sign in to save reels',
       });
       return;
@@ -414,7 +527,7 @@ const DiscoverScreen: React.FC = () => {
     if (!user) {
       Toast.show({
         type: 'error',
-        text1: 'Login Required',
+        text1: 'Login Required 🔐',
         text2: 'Please sign in to create plans',
       });
       return;
@@ -424,17 +537,19 @@ const DiscoverScreen: React.FC = () => {
 
   const handleClearItinerary = () => {
     setSelectedItinerary(null);
+    trackEvent('filter_itinerary_cleared');
   };
 
   const handleCitySelect = (city: string) => {
     setCurrentLocation(city);
+    trackEvent('filter_place_set', { city });
   };
 
   const handleAddToNewPlan = () => {
     setAddToPlanModal({ visible: false, reel: null });
     Toast.show({
       type: 'success',
-      text1: 'Added to New Plan!',
+      text1: 'Added to New Plan! ✨',
       text2: 'Complete it in the Plan tab',
     });
   };
@@ -443,7 +558,7 @@ const DiscoverScreen: React.FC = () => {
     setAddToPlanModal({ visible: false, reel: null });
     Toast.show({
       type: 'success',
-      text1: 'Added to Existing Plan!',
+      text1: 'Added to Existing Plan! 📅',
       text2: 'Check your day plans',
     });
   };
@@ -460,157 +575,196 @@ const DiscoverScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LocationFilter
-        currentLocation={currentLocation}
-        selectedItinerary={selectedItinerary}
-        onLocationPress={() => setIsCityModalVisible(true)}
-        onClearItinerary={handleClearItinerary}
-      />
-      
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Discovering amazing places...</Text>
-        </View>
-      ) : reels.length === 0 ? (
-        <EmptyState
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <LocationFilter
           currentLocation={currentLocation}
-          onRefresh={refetch}
+          selectedItinerary={selectedItinerary}
+          onLocationPress={() => setIsCityModalVisible(true)}
+          onClearItinerary={handleClearItinerary}
         />
-      ) : (
-        <FlashList
-          data={reels}
-          renderItem={renderReelCard}
-          keyExtractor={(item) => item.id}
-          estimatedItemSize={500}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor="#ff6b35"
-              titleColor="#ffffff"
-            />
-          }
-          contentContainerStyle={styles.listContainer}
+        
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <LinearGradient
+              colors={[Colors.primary, Colors.secondary]}
+              style={styles.loadingIcon}
+            >
+              <Ionicons name="sparkles" size={32} color={Colors.textPrimary} />
+            </LinearGradient>
+            <Text style={[styles.loadingText, Typography.body1]}>
+              Discovering amazing places...
+            </Text>
+          </View>
+        ) : reels.length === 0 ? (
+          <EmptyState
+            currentLocation={currentLocation}
+            onRefresh={refetch}
+          />
+        ) : (
+          <FlashList
+            data={reels}
+            renderItem={renderReelCard}
+            keyExtractor={(item) => item.id}
+            estimatedItemSize={500}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+                tintColor={Colors.primary}
+                titleColor={Colors.textPrimary}
+              />
+            }
+            contentContainerStyle={styles.listContainer}
+          />
+        )}
+
+        {/* City Selection Modal */}
+        <CitySelectionModal
+          isVisible={isCityModalVisible}
+          onClose={() => setIsCityModalVisible(false)}
+          onSelect={handleCitySelect}
+          currentCity={currentLocation}
         />
-      )}
 
-      {/* City Selection Modal */}
-      <CitySelectionModal
-        isVisible={isCityModalVisible}
-        onClose={() => setIsCityModalVisible(false)}
-        onSelect={handleCitySelect}
-        currentCity={currentLocation}
-      />
-
-      {/* Add to Plan Modal */}
-      <AddToPlanModal
-        isVisible={addToPlanModal.visible}
-        onClose={() => setAddToPlanModal({ visible: false, reel: null })}
-        reel={addToPlanModal.reel}
-        onAddToNewPlan={handleAddToNewPlan}
-        onAddToExistingPlan={handleAddToExistingPlan}
-      />
-    </SafeAreaView>
+        {/* Add to Plan Modal */}
+        <AddToPlanModal
+          isVisible={addToPlanModal.visible}
+          onClose={() => setAddToPlanModal({ visible: false, reel: null })}
+          reel={addToPlanModal.reel}
+          onAddToNewPlan={handleAddToNewPlan}
+          onAddToExistingPlan={handleAddToExistingPlan}
+        />
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: Colors.backgroundPrimary,
+  },
+  safeArea: {
+    flex: 1,
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+    gap: Spacing.s,
   },
   filterPill: {
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+  },
+  filterGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
     gap: 6,
   },
   itineraryPill: {
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    // Additional styling handled by gradient
   },
   filterText: {
-    color: '#ff6b35',
+    color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundAccent,
+    borderRadius: BorderRadius.l,
+    marginHorizontal: Spacing.m,
+    marginBottom: Spacing.m,
+    paddingHorizontal: Spacing.m,
+  },
+  searchIcon: {
+    marginRight: Spacing.s,
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    fontSize: 16,
+    color: Colors.textPrimary,
+  },
   listContainer: {
-    paddingBottom: 20,
+    paddingBottom: Spacing.m,
   },
   reelCard: {
-    backgroundColor: '#2a2a2a',
-    marginHorizontal: 20,
-    marginVertical: 8,
-    borderRadius: 16,
+    backgroundColor: Colors.backgroundSecondary,
+    marginHorizontal: Spacing.m,
+    marginVertical: Spacing.s,
+    borderRadius: BorderRadius.xl,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   reelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: 16,
-    paddingBottom: 8,
+    padding: Spacing.m,
+    paddingBottom: Spacing.s,
   },
   reelInfo: {
     flex: 1,
   },
   reelTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: Colors.textPrimary,
     marginBottom: 4,
   },
   reelLocation: {
-    color: '#8e8e93',
+    color: Colors.textMuted,
     fontSize: 12,
   },
   reelMeta: {
     alignItems: 'flex-end',
   },
+  creatorBadge: {
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.m,
+  },
   creatorHandle: {
-    color: '#ff6b35',
+    color: Colors.backgroundPrimary,
     fontSize: 12,
     fontWeight: '600',
   },
   chipsContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing.m,
+    paddingBottom: Spacing.m,
   },
   chip: {
-    backgroundColor: '#3a3a3a',
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.s,
     paddingVertical: 6,
-    borderRadius: 12,
-    marginRight: 8,
+    borderRadius: BorderRadius.l,
+    marginRight: Spacing.s,
+    gap: 4,
   },
   chipText: {
-    color: '#ffffff',
+    color: Colors.textPrimary,
     fontSize: 12,
     fontWeight: '500',
   },
   reelDisplay: {
-    marginHorizontal: 16,
-    borderRadius: 12,
+    marginHorizontal: Spacing.m,
+    borderRadius: BorderRadius.l,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: Spacing.m,
   },
   reelVideoPlaceholder: {
     height: 300,
-    backgroundColor: '#2a2a2a',
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: BorderRadius.l,
   },
   playIconContainer: {
     position: 'absolute',
@@ -620,26 +774,30 @@ const styles = StyleSheet.create({
     marginLeft: -32,
     zIndex: 2,
   },
+  playButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.large,
+  },
   reelOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 16,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    padding: Spacing.m,
+    borderBottomLeftRadius: BorderRadius.l,
+    borderBottomRightRadius: BorderRadius.l,
   },
   reelTitleLarge: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: Colors.textPrimary,
     marginBottom: 6,
   },
   reelDescription: {
-    color: '#ffffff',
-    fontSize: 14,
-    marginBottom: 8,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.s,
     opacity: 0.9,
   },
   reelMetaRow: {
@@ -650,40 +808,58 @@ const styles = StyleSheet.create({
   instagramLinkButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+  },
+  instagramGradient: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   instagramLink: {
-    color: '#ff6b35',
+    color: Colors.textPrimary,
     fontSize: 12,
     fontWeight: '600',
   },
+  reelStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   reelStats: {
-    color: '#ffffff',
+    color: Colors.textSecondary,
     fontSize: 12,
-    opacity: 0.8,
   },
   actionsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 12,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+    gap: Spacing.s,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3a3a3a',
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.m,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: BorderRadius.xl,
     gap: 6,
+    ...Shadows.small,
   },
   addButton: {
-    backgroundColor: '#ff6b35',
     flex: 1,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+  },
+  addButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
   },
   actionText: {
-    color: '#ffffff',
+    color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -691,86 +867,98 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: Spacing.m,
+  },
+  loadingIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingText: {
-    color: '#8e8e93',
-    fontSize: 16,
+    color: Colors.textSecondary,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.m,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
+    color: Colors.textPrimary,
+    textAlign: 'center',
   },
   emptySubtitle: {
-    color: '#8e8e93',
-    fontSize: 14,
+    color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#ff6b35',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    marginTop: Spacing.m,
+  },
+  retryButtonGradient: {
+    paddingHorizontal: Spacing.l,
+    paddingVertical: Spacing.s,
   },
   retryText: {
-    color: '#ffffff',
+    color: Colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
-  // Modal styles
+  // Modal styles with new colors
   modal: {
     justifyContent: 'center',
-    margin: 20,
+    margin: Spacing.m,
   },
   modalContent: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 16,
+    borderRadius: BorderRadius.xl,
     padding: 0,
     maxHeight: screenHeight * 0.7,
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: Spacing.m,
     borderBottomWidth: 1,
-    borderBottomColor: '#3a3a3a',
+    borderBottomColor: Colors.border,
   },
   modalTitle: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: Colors.textPrimary,
   },
   citiesList: {
     maxHeight: screenHeight * 0.5,
   },
   cityItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: Spacing.m,
     borderBottomWidth: 1,
-    borderBottomColor: '#3a3a3a',
+    borderBottomColor: Colors.border,
+    gap: Spacing.s,
   },
   selectedCityItem: {
-    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+    backgroundColor: Colors.primary + '20',
   },
   cityText: {
-    color: '#ffffff',
+    color: Colors.textPrimary,
     fontSize: 16,
+    flex: 1,
   },
   selectedCityText: {
-    color: '#ff6b35',
+    color: Colors.primary,
     fontWeight: '600',
   },
   // Bottom modal styles
@@ -779,69 +967,70 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   bottomModalContent: {
-    backgroundColor: '#2a2a2a',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
+    paddingHorizontal: Spacing.m,
     paddingBottom: 40,
-    paddingTop: 16,
+    paddingTop: Spacing.m,
   },
   modalHandle: {
     width: 40,
     height: 4,
-    backgroundColor: '#8e8e93',
     alignSelf: 'center',
     borderRadius: 2,
-    marginBottom: 20,
+    marginBottom: Spacing.m,
   },
   bottomModalTitle: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
+    color: Colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.s,
   },
   bottomModalSubtitle: {
-    color: '#8e8e93',
-    fontSize: 14,
+    color: Colors.textMuted,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: Spacing.l,
   },
   planOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3a3a3a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: Colors.backgroundAccent,
+    borderRadius: BorderRadius.l,
+    padding: Spacing.m,
+    marginBottom: Spacing.s,
+    ...Shadows.small,
   },
   planOptionIcon: {
-    marginRight: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.s,
   },
   planOptionContent: {
     flex: 1,
   },
   planOptionTitle: {
-    color: '#ffffff',
+    color: Colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
   planOptionSubtitle: {
-    color: '#8e8e93',
+    color: Colors.textMuted,
     fontSize: 14,
   },
   cancelButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#8e8e93',
-    borderRadius: 12,
-    padding: 16,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.l,
+    padding: Spacing.m,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: Spacing.s,
   },
   cancelButtonText: {
-    color: '#8e8e93',
+    color: Colors.textMuted,
     fontSize: 16,
     fontWeight: '600',
   },
