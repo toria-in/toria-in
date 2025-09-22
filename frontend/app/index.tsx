@@ -505,7 +505,14 @@ const DiscoverScreen: React.FC = () => {
       ) : (
         <FlashList
           data={reels}
-          renderItem={ReelCard}
+          renderItem={({ item }) => (
+            <ReelCard 
+              item={item} 
+              onUpvote={handleUpvote}
+              onSave={handleSave}
+              onAddToPlan={handleAddToPlan}
+            />
+          )}
           keyExtractor={(item) => item.id}
           estimatedItemSize={500}
           showsVerticalScrollIndicator={false}
