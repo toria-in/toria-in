@@ -3,6 +3,7 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { PlanProvider } from '../contexts/PlanContext';
 import { useEffect } from 'react';
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 import { Colors } from '../constants/Colors';
