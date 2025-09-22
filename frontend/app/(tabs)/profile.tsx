@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,18 +6,20 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  FlatList,
+  Modal,
   Alert,
+  Linking,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { FlatGrid } from 'react-native-super-grid';
-import { router } from 'expo-router';
-import Modal from 'react-native-modal';
+import Toast from 'react-native-toast-message';
 
-import { getUserDayPlans, getSavedReels } from '../services/api';
+import { fetchUserDayPlans, fetchSavedReels, trackEvent } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/Colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -27,398 +29,558 @@ interface DayPlan {
   city: string;
   going_with: string;
   focus: string;
-  status: string;
-  stops: any[];
-  created_at: string;
+  date: string;
+  status: 'current' | 'upcoming' | 'past';
+  stops: Array<{
+    id: string;
+    name: string;
+    type: 'Food' | 'Place';
+    time_window: string;
+    quick_info: string;
+    completed?: boolean;
+  }>;
+  items_count: number;
 }
 
 interface SavedReel {
   id: string;
   title: string;
+  thumbnail_url: string;
   location: string;
   type: string;
-  embed_code: string;
+  instagram_url: string;
 }
 
-const ProfileScreen: React.FC = () => {
-  const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'plans' | 'saved' | 'content'>('plans');
-  const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+// Collapsible Section Component
+const CollapsibleSection: React.FC<{
+  title: string;
+  icon: string;
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+}> = ({ title, icon, children, defaultExpanded = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-  // Fetch user day plans
+  return (
+    <View style={styles.sectionContainer}>
+      <TouchableOpacity
+        style={styles.sectionHeader}
+        onPress={() => setIsExpanded(!isExpanded)}
+      >
+        <View style={styles.sectionHeaderLeft}>
+          <View style={[styles.sectionIcon, { backgroundColor: Colors.primary }]}>
+            <Ionicons name={icon as any} size={20} color={Colors.textPrimary} />
+          </View>
+          <Text style={[styles.sectionTitle, Typography.h4]}>{title}</Text>
+        </View>
+        <Ionicons
+          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+          size={20}
+          color={Colors.textMuted}
+        />
+      </TouchableOpacity>
+      
+      {isExpanded && (
+        <View style={styles.sectionContent}>
+          {children}
+        </View>
+      )}
+    </View>
+  );
+};
+
+// Day Plan Row Component
+const DayPlanRow: React.FC<{
+  plan: DayPlan;
+  onStartDay?: (plan: DayPlan) => void;
+  onViewDetails?: (plan: DayPlan) => void;
+}> = ({ plan, onStartDay, onViewDetails }) => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'current': return Colors.current;
+      case 'upcoming': return Colors.upcoming;
+      case 'past': return Colors.past;
+      default: return Colors.textMuted;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'current': return 'play-circle';
+      case 'upcoming': return 'time';
+      case 'past': return 'checkmark-circle';
+      default: return 'calendar';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  return (
+    <TouchableOpacity
+      style={[styles.planRow, { borderLeftColor: getStatusColor(plan.status) }]}
+      onPress={() => onViewDetails?.(plan)}
+    >
+      <View style={styles.planRowHeader}>
+        <View style={styles.planRowLeft}>
+          <View style={[styles.statusIndicator, { backgroundColor: getStatusColor(plan.status) }]}>
+            <Ionicons name={getStatusIcon(plan.status) as any} size={16} color={Colors.textPrimary} />
+          </View>
+          <View style={styles.planInfo}>
+            <Text style={[styles.planTitle, Typography.body1]} numberOfLines={1}>
+              {plan.city} — {plan.going_with} — {plan.focus}
+            </Text>
+            <Text style={[styles.planMeta, Typography.caption]}>
+              {formatDate(plan.date)} • {plan.items_count} stops
+            </Text>
+          </View>
+        </View>
+        
+        {plan.status === 'current' && onStartDay && (
+          <TouchableOpacity
+            style={styles.startDayButton}
+            onPress={() => onStartDay(plan)}
+          >
+            <Text style={styles.startDayText}>Start My Day</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Saved Reel Grid Item
+const SavedReelItem: React.FC<{
+  reel: SavedReel;
+  onPress: () => void;
+  onAddToPlan: () => void;
+}> = ({ reel, onPress, onAddToPlan }) => {
+  return (
+    <TouchableOpacity style={styles.reelItem} onPress={onPress}>
+      <View style={styles.reelThumbnail}>
+        <View style={[styles.reelPlaceholder, { backgroundColor: Colors.backgroundAccent }]}>
+          <Ionicons name="play" size={24} color={Colors.primary} />
+        </View>
+        <View style={styles.reelOverlay}>
+          <Text style={[styles.reelType, { backgroundColor: reel.type === 'Food' ? Colors.food : Colors.place }]}>
+            {reel.type}
+          </Text>
+        </View>
+      </View>
+      <Text style={[styles.reelTitle, Typography.body2]} numberOfLines={2}>
+        {reel.title}
+      </Text>
+      <Text style={[styles.reelLocation, Typography.caption]} numberOfLines={1}>
+        📍 {reel.location}
+      </Text>
+      
+      <TouchableOpacity
+        style={styles.addToPlanButton}
+        onPress={onAddToPlan}
+      >
+        <Ionicons name="add-circle" size={16} color={Colors.primary} />
+        <Text style={styles.addToPlanText}>Add to Plan</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+};
+
+// Start My Day Modal Component
+const StartMyDayModal: React.FC<{
+  visible: boolean;
+  plan: DayPlan | null;
+  onClose: () => void;
+}> = ({ visible, plan, onClose }) => {
+  const [completedStops, setCompletedStops] = useState<Set<string>>(new Set());
+
+  const handleStopComplete = (stopId: string) => {
+    const newCompleted = new Set(completedStops);
+    if (newCompleted.has(stopId)) {
+      newCompleted.delete(stopId);
+    } else {
+      newCompleted.add(stopId);
+      // Show feedback modal
+      Toast.show({
+        type: 'success',
+        text1: '✓ Stop Completed!',
+        text2: 'How was your experience?',
+      });
+    }
+    setCompletedStops(newCompleted);
+  };
+
+  const handleGetDirections = async () => {
+    if (!plan?.stops.length) return;
+
+    const waypoints = plan.stops.map(stop => encodeURIComponent(stop.name)).join('/');
+    const googleMapsUrl = `https://www.google.com/maps/dir/${waypoints}`;
+    
+    try {
+      await Linking.openURL(googleMapsUrl);
+      trackEvent('start_my_day_directions', { plan_id: plan.id });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Cannot Open Maps',
+        text2: 'Please check if Google Maps is installed',
+      });
+    }
+  };
+
+  if (!plan) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <View style={styles.modalHeaderLeft}>
+            <Text style={[styles.modalTitle, Typography.h3]}>Day 1</Text>
+            <Text style={[styles.modalSubtitle, Typography.body2]}>
+              {plan.city} • {plan.going_with}
+            </Text>
+          </View>
+          <View style={styles.modalHeaderRight}>
+            <TouchableOpacity
+              style={styles.directionsButton}
+              onPress={handleGetDirections}
+            >
+              <Ionicons name="navigate" size={20} color={Colors.textPrimary} />
+              <Text style={styles.directionsText}>Get Directions</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {plan.stops.map((stop, index) => (
+            <View key={stop.id} style={styles.stopCard}>
+              <View style={styles.stopHeader}>
+                <View style={styles.stopInfo}>
+                  <Text style={[styles.stopName, Typography.h4]}>{stop.name}</Text>
+                  <View style={styles.stopMeta}>
+                    <View style={[
+                      styles.stopType,
+                      { backgroundColor: stop.type === 'Food' ? Colors.food : Colors.place }
+                    ]}>
+                      <Ionicons
+                        name={stop.type === 'Food' ? 'restaurant' : 'location'}
+                        size={12}
+                        color={Colors.textPrimary}
+                      />
+                      <Text style={styles.stopTypeText}>{stop.type}</Text>
+                    </View>
+                    <Text style={[styles.stopTime, Typography.caption]}>
+                      {stop.time_window}
+                    </Text>
+                  </View>
+                </View>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.checkButton,
+                    completedStops.has(stop.id) && styles.checkButtonCompleted
+                  ]}
+                  onPress={() => handleStopComplete(stop.id)}
+                >
+                  <Ionicons
+                    name={completedStops.has(stop.id) ? 'checkmark' : 'square-outline'}
+                    size={20}
+                    color={completedStops.has(stop.id) ? Colors.textPrimary : Colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={[styles.stopQuickInfo, Typography.body2]}>
+                {stop.quick_info}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          <TouchableOpacity style={styles.addItemButton}>
+            <Ionicons name="add-circle" size={20} color={Colors.primary} />
+            <Text style={styles.addItemText}>Add Item</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+};
+
+const ProfileScreen: React.FC = () => {
+  const { user, logout } = useAuth();
+  const [startMyDayModal, setStartMyDayModal] = useState<{
+    visible: boolean;
+    plan: DayPlan | null;
+  }>({ visible: false, plan: null });
+
+  // Fetch user's day plans
   const {
     data: dayPlans = [],
     isLoading: plansLoading,
+    refetch: refetchPlans,
   } = useQuery({
-    queryKey: ['dayPlans', user?.id],
-    queryFn: () => getUserDayPlans(user?.id || ''),
-    enabled: !!user,
+    queryKey: ['userDayPlans', user?.id],
+    queryFn: () => fetchUserDayPlans(user?.id || ''),
+    enabled: !!user?.id,
   });
 
   // Fetch saved reels
   const {
     data: savedReels = [],
     isLoading: reelsLoading,
+    refetch: refetchReels,
   } = useQuery({
     queryKey: ['savedReels', user?.id],
-    queryFn: () => getSavedReels(user?.id || ''),
-    enabled: !!user,
+    queryFn: () => fetchSavedReels(user?.id || ''),
+    enabled: !!user?.id,
   });
 
-  const currentPlans = dayPlans.filter((plan: DayPlan) => plan.status === 'current');
-  const upcomingPlans = dayPlans.filter((plan: DayPlan) => plan.status === 'upcoming');
-  const pastPlans = dayPlans.filter((plan: DayPlan) => plan.status === 'past');
+  // Group day plans by status
+  const currentPlans = dayPlans.filter(plan => plan.status === 'current');
+  const upcomingPlans = dayPlans.filter(plan => plan.status === 'upcoming');
+  const pastPlans = dayPlans.filter(plan => plan.status === 'past');
 
-  const handleStartMyDay = (planId: string) => {
-    router.push(`/start-my-day/${planId}`);
+  // Handle Start My Day
+  const handleStartMyDay = (plan: DayPlan) => {
+    setStartMyDayModal({ visible: true, plan });
+    trackEvent('start_my_day_opened', { plan_id: plan.id });
   };
 
-  const handleSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-            router.replace('/(auth)/login');
-          },
-        },
-      ]
+  // Handle settings navigation
+  const handleSettings = (setting: string) => {
+    switch (setting) {
+      case 'language':
+        Alert.alert('Language Settings', 'Language preferences coming soon!');
+        break;
+      case 'notifications':
+        Alert.alert('Notifications', 'Notification settings coming soon!');
+        break;
+      case 'privacy':
+        Alert.alert('Privacy & Safety', 'Privacy settings coming soon!');
+        break;
+      case 'help':
+        Alert.alert('Help & Support', 'Help center coming soon!');
+        break;
+      case 'legal':
+        Alert.alert('Legal', 'Terms and privacy policy coming soon!');
+        break;
+      case 'logout':
+        Alert.alert(
+          'Logout',
+          'Are you sure you want to logout?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Logout', style: 'destructive', onPress: logout },
+          ]
+        );
+        break;
+    }
+  };
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.notLoggedIn}>
+          <Ionicons name="person-circle-outline" size={64} color={Colors.textMuted} />
+          <Text style={[styles.notLoggedInText, Typography.h4]}>
+            Please sign in to view your profile
+          </Text>
+        </View>
+      </SafeAreaView>
     );
-  };
-
-  const SettingsModal = () => (
-    <Modal
-      isVisible={isSettingsVisible}
-      onBackdropPress={() => setIsSettingsVisible(false)}
-      style={styles.modal}
-    >
-      <View style={styles.settingsContent}>
-        <View style={styles.settingsHeader}>
-          <Text style={styles.settingsTitle}>Settings</Text>
-          <TouchableOpacity onPress={() => setIsSettingsVisible(false)}>
-            <Ionicons name="close" size={24} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.settingsList}>
-          <TouchableOpacity style={styles.settingItem}>
-            <Ionicons name="language" size={20} color="#ff6b35" />
-            <Text style={styles.settingText}>Language</Text>
-            <Text style={styles.settingValue}>English</Text>
-            <Ionicons name="chevron-forward" size={16} color="#8e8e93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <Ionicons name="notifications" size={20} color="#ff6b35" />
-            <Text style={styles.settingText}>Notifications</Text>
-            <Ionicons name="chevron-forward" size={16} color="#8e8e93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <Ionicons name="shield-checkmark" size={20} color="#ff6b35" />
-            <Text style={styles.settingText}>Privacy & Safety</Text>
-            <Ionicons name="chevron-forward" size={16} color="#8e8e93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <Ionicons name="help-circle" size={20} color="#ff6b35" />
-            <Text style={styles.settingText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={16} color="#8e8e93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <Ionicons name="document-text" size={20} color="#ff6b35" />
-            <Text style={styles.settingText}>Terms of Service</Text>
-            <Ionicons name="chevron-forward" size={16} color="#8e8e93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingItem}>
-            <Ionicons name="lock-closed" size={20} color="#ff6b35" />
-            <Text style={styles.settingText}>Privacy Policy</Text>
-            <Ionicons name="chevron-forward" size={16} color="#8e8e93" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.settingItem, styles.signOutItem]} onPress={handleSignOut}>
-            <Ionicons name="log-out" size={20} color="#ff4444" />
-            <Text style={[styles.settingText, { color: '#ff4444' }]}>Sign Out</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-
-  const ProfileHeader = () => (
-    <View style={styles.profileHeader}>
-      <View style={styles.avatarContainer}>
-        <View style={styles.avatar}>
-          {user?.photoURL ? (
-            <Image source={{ uri: user.photoURL }} style={styles.avatarImage} />
-          ) : (
-            <Ionicons name="person" size={40} color="#ff6b35" />
-          )}
-        </View>
-        <TouchableOpacity 
-          style={styles.settingsButton}
-          onPress={() => setIsSettingsVisible(true)}
-        >
-          <Ionicons name="menu" size={24} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
-      
-      <Text style={styles.displayName}>{user?.displayName || 'Travel Explorer'}</Text>
-      <Text style={styles.userStats}>
-        {dayPlans.length} trips • {savedReels.length} saved
-      </Text>
-      
-      {!user?.emailVerified && (
-        <View style={styles.verificationBanner}>
-          <Ionicons name="warning" size={16} color="#ff6b35" />
-          <Text style={styles.verificationText}>Please verify your email</Text>
-        </View>
-      )}
-    </View>
-  );
-
-  const TabNavigation = () => (
-    <View style={styles.tabNavigation}>
-      <TouchableOpacity
-        style={[styles.tabButton, activeTab === 'plans' && styles.activeTab]}
-        onPress={() => setActiveTab('plans')}
-      >
-        <Ionicons
-          name={activeTab === 'plans' ? 'map' : 'map-outline'}
-          size={20}
-          color={activeTab === 'plans' ? '#ff6b35' : '#8e8e93'}
-        />
-        <Text style={[
-          styles.tabText,
-          activeTab === 'plans' && styles.activeTabText,
-        ]}>
-          My Day Plans
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.tabButton, activeTab === 'saved' && styles.activeTab]}
-        onPress={() => setActiveTab('saved')}
-      >
-        <Ionicons
-          name={activeTab === 'saved' ? 'bookmark' : 'bookmark-outline'}
-          size={20}
-          color={activeTab === 'saved' ? '#ff6b35' : '#8e8e93'}
-        />
-        <Text style={[
-          styles.tabText,
-          activeTab === 'saved' && styles.activeTabText,
-        ]}>
-          Saved Reels
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.tabButton, activeTab === 'content' && styles.activeTab]}
-        onPress={() => setActiveTab('content')}
-      >
-        <Ionicons
-          name={activeTab === 'content' ? 'stats-chart' : 'stats-chart-outline'}
-          size={20}
-          color={activeTab === 'content' ? '#ff6b35' : '#8e8e93'}
-        />
-        <Text style={[
-          styles.tabText,
-          activeTab === 'content' && styles.activeTabText,
-        ]}>
-          My Content
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const DayPlanCard = ({ plan }: { plan: DayPlan }) => (
-    <View style={styles.planCard}>
-      <View style={styles.planHeader}>
-        <View style={styles.planInfo}>
-          <Text style={styles.planTitle}>{plan.title}</Text>
-          <Text style={styles.planMeta}>
-            <Ionicons name="location-outline" size={12} color="#8e8e93" />
-            {' '}{plan.city} • {plan.stops.length} stops
-          </Text>
-        </View>
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: plan.status === 'current' ? '#4CAF50' : plan.status === 'upcoming' ? '#ff6b35' : '#8e8e93' }
-        ]}>
-          <Text style={styles.statusText}>{plan.status}</Text>
-        </View>
-      </View>
-
-      <View style={styles.planDetails}>
-        <Text style={styles.planDetailText}>
-          <Ionicons name="people-outline" size={12} color="#8e8e93" />
-          {' '}{plan.going_with}
-        </Text>
-        <Text style={styles.planDetailText}>
-          <Ionicons name="restaurant-outline" size={12} color="#8e8e93" />
-          {' '}{plan.focus}
-        </Text>
-      </View>
-
-      {plan.status === 'current' && (
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={() => handleStartMyDay(plan.id)}
-        >
-          <Ionicons name="play" size={16} color="#ffffff" />
-          <Text style={styles.startButtonText}>Start My Day</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  const MyDayPlansTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      {/* Current Plans */}
-      {currentPlans.length > 0 && (
-        <View style={styles.planSection}>
-          <Text style={styles.sectionTitle}>🎯 Current</Text>
-          {currentPlans.map((plan: DayPlan) => (
-            <DayPlanCard key={plan.id} plan={plan} />
-          ))}
-        </View>
-      )}
-
-      {/* Upcoming Plans */}
-      {upcomingPlans.length > 0 && (
-        <View style={styles.planSection}>
-          <Text style={styles.sectionTitle}>📅 Upcoming</Text>
-          {upcomingPlans.map((plan: DayPlan) => (
-            <DayPlanCard key={plan.id} plan={plan} />
-          ))}
-        </View>
-      )}
-
-      {/* Past Plans */}
-      {pastPlans.length > 0 && (
-        <View style={styles.planSection}>
-          <Text style={styles.sectionTitle}>✅ Past</Text>
-          {pastPlans.map((plan: DayPlan) => (
-            <DayPlanCard key={plan.id} plan={plan} />
-          ))}
-        </View>
-      )}
-
-      {dayPlans.length === 0 && (
-        <View style={styles.emptyState}>
-          <Ionicons name="map-outline" size={64} color="#8e8e93" />
-          <Text style={styles.emptyTitle}>No Day Plans Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Create your first travel plan in the Plan tab!
-          </Text>
-          <TouchableOpacity 
-            style={styles.createPlanButton}
-            onPress={() => router.push('/(tabs)/plan')}
-          >
-            <Text style={styles.createPlanText}>Create Plan</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
-  );
-
-  const SavedReelCard = ({ reel }: { reel: SavedReel }) => (
-    <TouchableOpacity style={styles.reelCard}>
-      <View style={styles.reelThumbnail}>
-        <Ionicons name="play-circle" size={40} color="#ff6b35" />
-      </View>
-      <View style={styles.reelOverlay}>
-        <Text style={styles.reelTitle} numberOfLines={2}>
-          {reel.title}
-        </Text>
-        <Text style={styles.reelLocation}>
-          <Ionicons name="location-outline" size={10} color="#ffffff" />
-          {' '}{reel.location}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const SavedReelsTab = () => (
-    <View style={styles.tabContent}>
-      {savedReels.length > 0 ? (
-        <FlatGrid
-          itemDimension={screenWidth / 2 - 30}
-          data={savedReels}
-          style={styles.reelGrid}
-          spacing={10}
-          renderItem={({ item }) => <SavedReelCard reel={item} />}
-        />
-      ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="bookmark-outline" size={64} color="#8e8e93" />
-          <Text style={styles.emptyTitle}>No Saved Reels</Text>
-          <Text style={styles.emptySubtitle}>
-            Save reels you love from the Discover tab!
-          </Text>
-          <TouchableOpacity 
-            style={styles.createPlanButton}
-            onPress={() => router.push('/(tabs)')}
-          >
-            <Text style={styles.createPlanText}>Discover Reels</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-
-  const MyContentTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>Uploads</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>Views</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{savedReels.length}</Text>
-          <Text style={styles.statLabel}>Saves</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>0</Text>
-          <Text style={styles.statLabel}>Add-to-Plan</Text>
-        </View>
-      </View>
-
-      <View style={styles.emptyState}>
-        <Ionicons name="camera-outline" size={64} color="#8e8e93" />
-        <Text style={styles.emptyTitle}>Creator Dashboard</Text>
-        <Text style={styles.emptySubtitle}>
-          Share your travel experiences and track your content performance
-        </Text>
-        <TouchableOpacity style={styles.featureButton}>
-          <Text style={styles.featureButtonText}>Coming Soon</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
-  );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ProfileHeader />
-      <TabNavigation />
-      
-      {activeTab === 'plans' && <MyDayPlansTab />}
-      {activeTab === 'saved' && <SavedReelsTab />}
-      {activeTab === 'content' && <MyContentTab />}
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <View style={styles.profileInfo}>
+            <View style={[styles.profileAvatar, { backgroundColor: Colors.primary }]}>
+              <Text style={styles.profileInitial}>
+                {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
+              </Text>
+            </View>
+            <View style={styles.profileDetails}>
+              <Text style={[styles.profileName, Typography.h3]}>
+                {user.displayName || 'Traveler'}
+              </Text>
+              <Text style={[styles.profileEmail, Typography.body2]}>
+                {user.email}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-      <SettingsModal />
+        {/* 1. My Day Plans */}
+        <CollapsibleSection title="My Day Plans" icon="calendar" defaultExpanded={true}>
+          {plansLoading ? (
+            <Text style={[styles.loadingText, Typography.body2]}>Loading your plans...</Text>
+          ) : (
+            <View style={styles.plansContainer}>
+              {/* Current Plans */}
+              {currentPlans.length > 0 && (
+                <View style={styles.planGroup}>
+                  <Text style={[styles.planGroupTitle, Typography.body1]}>Current</Text>
+                  {currentPlans.map(plan => (
+                    <DayPlanRow
+                      key={plan.id}
+                      plan={plan}
+                      onStartDay={handleStartMyDay}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Upcoming Plans */}
+              {upcomingPlans.length > 0 && (
+                <View style={styles.planGroup}>
+                  <Text style={[styles.planGroupTitle, Typography.body1]}>Upcoming</Text>
+                  {upcomingPlans.map(plan => (
+                    <DayPlanRow key={plan.id} plan={plan} />
+                  ))}
+                </View>
+              )}
+
+              {/* Past Plans */}
+              {pastPlans.length > 0 && (
+                <View style={styles.planGroup}>
+                  <Text style={[styles.planGroupTitle, Typography.body1]}>Past</Text>
+                  {pastPlans.map(plan => (
+                    <DayPlanRow key={plan.id} plan={plan} />
+                  ))}
+                </View>
+              )}
+
+              {dayPlans.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Ionicons name="calendar-outline" size={48} color={Colors.textMuted} />
+                  <Text style={[styles.emptyText, Typography.body2]}>
+                    No day plans yet. Start planning your next adventure!
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </CollapsibleSection>
+
+        {/* 2. Saved / Favorite Reels */}
+        <CollapsibleSection title="Saved Reels" icon="bookmark">
+          {reelsLoading ? (
+            <Text style={[styles.loadingText, Typography.body2]}>Loading saved reels...</Text>
+          ) : (
+            <View style={styles.reelsContainer}>
+              {savedReels.length > 0 ? (
+                <FlatList
+                  data={savedReels}
+                  renderItem={({ item }) => (
+                    <SavedReelItem
+                      reel={item}
+                      onPress={() => {
+                        // Open reel detail or Instagram
+                        trackEvent('saved_reel_viewed', { reel_id: item.id });
+                      }}
+                      onAddToPlan={() => {
+                        Toast.show({
+                          type: 'success',
+                          text1: 'Added to Plan!',
+                          text2: 'Reel added to your day plan',
+                        });
+                      }}
+                    />
+                  )}
+                  keyExtractor={(item) => item.id}
+                  numColumns={2}
+                  columnWrapperStyle={styles.reelsRow}
+                  scrollEnabled={false}
+                />
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="bookmark-outline" size={48} color={Colors.textMuted} />
+                  <Text style={[styles.emptyText, Typography.body2]}>
+                    No saved reels yet. Save your favorite places from Discover!
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </CollapsibleSection>
+
+        {/* 3. My Content & Stats */}
+        <CollapsibleSection title="My Content & Stats" icon="stats-chart">
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <Text style={[styles.statNumber, Typography.h3]}>0</Text>
+              <Text style={[styles.statLabel, Typography.caption]}>Uploads</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statNumber, Typography.h3]}>0</Text>
+              <Text style={[styles.statLabel, Typography.caption]}>Views</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statNumber, Typography.h3]}>
+                {savedReels.length}
+              </Text>
+              <Text style={[styles.statLabel, Typography.caption]}>Saves</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statNumber, Typography.h3]}>
+                {dayPlans.length}
+              </Text>
+              <Text style={[styles.statLabel, Typography.caption]}>Plans</Text>
+            </View>
+          </View>
+        </CollapsibleSection>
+
+        {/* 4. Settings */}
+        <CollapsibleSection title="Settings" icon="settings">
+          <View style={styles.settingsContainer}>
+            {[
+              { icon: 'language', label: 'Language (EN/HI)', action: 'language' },
+              { icon: 'notifications', label: 'Notifications', action: 'notifications' },
+              { icon: 'shield', label: 'Privacy & Safety', action: 'privacy' },
+              { icon: 'help-circle', label: 'Help & Support', action: 'help' },
+              { icon: 'document-text', label: 'Legal', action: 'legal' },
+              { icon: 'log-out', label: 'Logout', action: 'logout' },
+            ].map((setting) => (
+              <TouchableOpacity
+                key={setting.action}
+                style={styles.settingItem}
+                onPress={() => handleSettings(setting.action)}
+              >
+                <View style={styles.settingLeft}>
+                  <Ionicons name={setting.icon as any} size={20} color={Colors.textSecondary} />
+                  <Text style={[styles.settingLabel, Typography.body1]}>
+                    {setting.label}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </CollapsibleSection>
+      </ScrollView>
+
+      {/* Start My Day Modal */}
+      <StartMyDayModal
+        visible={startMyDayModal.visible}
+        plan={startMyDayModal.plan}
+        onClose={() => setStartMyDayModal({ visible: false, plan: null })}
+      />
     </SafeAreaView>
   );
 };
@@ -426,311 +588,375 @@ const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: Colors.backgroundPrimary,
+  },
+  scrollView: {
+    flex: 1,
   },
   profileHeader: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    backgroundColor: Colors.backgroundSecondary,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.l,
   },
-  avatarContainer: {
+  profileInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 16,
+    gap: Spacing.m,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#2a2a2a',
+  profileAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#ff6b35',
-    overflow: 'hidden',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 37,
-  },
-  settingsButton: {
-    padding: 8,
-  },
-  displayName: {
-    color: '#ffffff',
+  profileInitial: {
+    color: Colors.textPrimary,
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 8,
   },
-  userStats: {
-    color: '#8e8e93',
-    fontSize: 16,
+  profileDetails: {
+    flex: 1,
   },
-  verificationBanner: {
+  profileName: {
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  profileEmail: {
+    color: Colors.textSecondary,
+  },
+  sectionContainer: {
+    backgroundColor: Colors.backgroundPrimary,
+    marginBottom: Spacing.s,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 107, 53, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+  },
+  sectionIcon: {
+    width: 32,
+    height: 32,
     borderRadius: 16,
-    marginTop: 12,
-    gap: 6,
-  },
-  verificationText: {
-    color: '#ff6b35',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  tabNavigation: {
-    flexDirection: 'row',
-    backgroundColor: '#2a2a2a',
-    marginHorizontal: 20,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  activeTab: {
-    backgroundColor: '#3a3a3a',
-  },
-  tabText: {
-    color: '#8e8e93',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  activeTabText: {
-    color: '#ff6b35',
-  },
-  tabContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  planSection: {
-    marginBottom: 24,
   },
   sectionTitle: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
+    color: Colors.textPrimary,
   },
-  planCard: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+  sectionContent: {
+    paddingHorizontal: Spacing.m,
+    paddingBottom: Spacing.m,
   },
-  planHeader: {
+  plansContainer: {
+    gap: Spacing.m,
+  },
+  planGroup: {
+    gap: Spacing.s,
+  },
+  planGroupTitle: {
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: Spacing.s,
+  },
+  planRow: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: BorderRadius.l,
+    borderLeftWidth: 4,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    ...Shadows.small,
+  },
+  planRowHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+  },
+  planRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+    flex: 1,
+  },
+  statusIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   planInfo: {
     flex: 1,
   },
   planTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  planMeta: {
-    color: '#8e8e93',
-    fontSize: 12,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  planDetails: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
-  },
-  planDetailText: {
-    color: '#8e8e93',
-    fontSize: 12,
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingVertical: 10,
-    gap: 6,
-  },
-  startButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  reelGrid: {
-    flex: 1,
-  },
-  reelCard: {
-    aspectRatio: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#2a2a2a',
-  },
-  reelThumbnail: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3a3a3a',
-  },
-  reelOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 8,
-  },
-  reelTitle: {
-    color: '#ffffff',
-    fontSize: 12,
+    color: Colors.textPrimary,
     fontWeight: '600',
     marginBottom: 2,
   },
-  reelLocation: {
-    color: '#ffffff',
-    fontSize: 10,
+  planMeta: {
+    color: Colors.textMuted,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    gap: 12,
+  startDayButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.m,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statNumber: {
-    color: '#ff6b35',
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  statLabel: {
-    color: '#8e8e93',
+  startDayText: {
+    color: Colors.textPrimary,
     fontSize: 12,
     fontWeight: '600',
   },
-  emptyState: {
+  reelsContainer: {
+    gap: Spacing.s,
+  },
+  reelsRow: {
+    justifyContent: 'space-between',
+  },
+  reelItem: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: BorderRadius.l,
+    padding: Spacing.s,
+    width: (screenWidth - Spacing.m * 3) / 2,
+    ...Shadows.small,
+  },
+  reelThumbnail: {
+    aspectRatio: 16 / 9,
+    borderRadius: BorderRadius.m,
+    overflow: 'hidden',
+    marginBottom: Spacing.s,
+    position: 'relative',
+  },
+  reelPlaceholder: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
   },
-  emptyTitle: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
+  reelOverlay: {
+    position: 'absolute',
+    top: Spacing.s,
+    right: Spacing.s,
   },
-  emptySubtitle: {
-    color: '#8e8e93',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 32,
-    marginBottom: 24,
-  },
-  createPlanButton: {
-    backgroundColor: '#ff6b35',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  createPlanText: {
-    color: '#ffffff',
-    fontSize: 14,
+  reelType: {
+    color: Colors.textPrimary,
+    fontSize: 10,
     fontWeight: '600',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  featureButton: {
-    backgroundColor: '#3a3a3a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  featureButtonText: {
-    color: '#8e8e93',
-    fontSize: 14,
+  reelTitle: {
+    color: Colors.textPrimary,
     fontWeight: '600',
+    marginBottom: 4,
   },
-  // Settings Modal
-  modal: {
-    justifyContent: 'flex-end',
-    margin: 0,
+  reelLocation: {
+    color: Colors.textMuted,
+    marginBottom: Spacing.s,
   },
-  settingsContent: {
-    backgroundColor: '#2a2a2a',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    paddingTop: 16,
-    maxHeight: '80%',
-  },
-  settingsHeader: {
+  addToPlanButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    gap: 4,
+    paddingVertical: 4,
   },
-  settingsTitle: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
+  addToPlanText: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
   },
-  settingsList: {
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.s,
+  },
+  statCard: {
+    backgroundColor: Colors.backgroundSecondary,
     flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    paddingVertical: Spacing.m,
+    borderRadius: BorderRadius.l,
+    ...Shadows.small,
+  },
+  statNumber: {
+    color: Colors.primary,
+    marginBottom: 4,
+  },
+  statLabel: {
+    color: Colors.textMuted,
+  },
+  settingsContainer: {
+    gap: 1,
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#3a3a3a',
-    gap: 12,
+    justifyContent: 'space-between',
+    backgroundColor: Colors.backgroundSecondary,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
   },
-  settingText: {
-    color: '#ffffff',
-    fontSize: 16,
+  settingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+  },
+  settingLabel: {
+    color: Colors.textPrimary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+    gap: Spacing.s,
+  },
+  emptyText: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  loadingText: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: Spacing.m,
+  },
+  notLoggedIn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.m,
+  },
+  notLoggedInText: {
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.backgroundPrimary,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalHeaderLeft: {
     flex: 1,
   },
-  settingValue: {
-    color: '#8e8e93',
-    fontSize: 14,
+  modalTitle: {
+    color: Colors.textPrimary,
   },
-  signOutItem: {
-    borderBottomWidth: 0,
-    marginTop: 20,
+  modalSubtitle: {
+    color: Colors.textMuted,
+  },
+  modalHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+  },
+  directionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.m,
+    gap: 4,
+  },
+  directionsText: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: Spacing.m,
+  },
+  stopCard: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: BorderRadius.l,
+    padding: Spacing.m,
+    marginVertical: Spacing.s,
+    ...Shadows.small,
+  },
+  stopHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.s,
+  },
+  stopInfo: {
+    flex: 1,
+  },
+  stopName: {
+    color: Colors.textPrimary,
+    marginBottom: Spacing.s,
+  },
+  stopMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.s,
+  },
+  stopType: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 4,
+  },
+  stopTypeText: {
+    color: Colors.textPrimary,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  stopTime: {
+    color: Colors.textMuted,
+  },
+  checkButton: {
+    padding: 4,
+  },
+  checkButtonCompleted: {
+    backgroundColor: Colors.success,
+    borderRadius: 4,
+  },
+  stopQuickInfo: {
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  modalFooter: {
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  addItemButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    paddingVertical: Spacing.s,
+    borderRadius: BorderRadius.l,
+    gap: Spacing.s,
+  },
+  addItemText: {
+    color: Colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
