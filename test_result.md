@@ -169,8 +169,8 @@ frontend:
   - task: "Tab Navigation Structure"
     implemented: true
     working: false
-    file: "/app/frontend/app/index.tsx"
-    stuck_count: 1
+    file: "/app/frontend/app/_layout.tsx"
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -180,6 +180,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL ISSUE: NavigationContainer conflict with expo-router. App shows error screen 'Looks like you have nested a NavigationContainer inside another'. Fixed by removing React Navigation and implementing custom tab navigation with useState. App structure is implemented but has navigation conflicts that prevent proper rendering."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL REACT HOOKS VIOLATION: 'Rendered fewer hooks than expected. This may be caused by an accidental early return statement.' The expo-router navigation is properly implemented with Tabs component, but there's a React Hooks violation in DiscoverScreen component caused by nested components with hooks (ReelCard, LocationFilter, EmptyState). Fixed by moving components outside but issue persists due to corrupted code. API calls working (GET /reels?location=Delhi returns 200), but app crashes due to hooks violation."
 
   - task: "Discover Screen (Instagram Reels)"
     implemented: true
