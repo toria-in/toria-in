@@ -27,9 +27,8 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <NavigationContainer>
-        <StatusBar style="light" backgroundColor="#1a1a1a" />
-        <Tab.Navigator
+      <StatusBar style="light" backgroundColor="#1a1a1a" />
+      <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             let iconName: keyof typeof Ionicons.glyphMap;
