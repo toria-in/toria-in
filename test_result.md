@@ -118,7 +118,7 @@ backend:
         comment: "Complete backend with all endpoints - Instagram reels, AI travel planning, day plans, chatbot, user management"
       - working: true
         agent: "testing"
-        comment: "✅ COMPREHENSIVE TESTING PASSED: All 7 backend API categories tested successfully - Health Check (200 OK), User Management (create/retrieve), Instagram Reels (CRUD + upvote/save), AI Travel Planning (plan_my_trip + top_places with Gemini 2.5 Flash), Day Plans Management (full CRUD), Travel Buddy Chatbot (dayplans + startmyday), Saved Reels (fixed ObjectId serialization issue). Backend running on https://reel2trip.preview.emergentagent.com/api with MongoDB persistence working correctly."
+        comment: "✅ COMPREHENSIVE TESTING PASSED: All 7 backend API categories tested successfully - Health Check (200 OK), User Management (create/retrieve), Instagram Reels (CRUD + upvote/save), AI Travel Planning (plan_my_trip + top_places with Gemini 2.5 Flash), Day Plans Management (full CRUD), Travel Buddy Chatbot (dayplans + startmyday), Saved Reels (fixed ObjectId serialization issue). Backend running on https://toria-discover-plan.preview.emergentagent.com/api with MongoDB persistence working correctly."
 
   - task: "Gemini 2.5 Flash Integration"
     implemented: true
@@ -266,7 +266,7 @@ frontend:
         comment: "Complete API service layer with React Query integration - needs testing"
       - working: true
         agent: "testing"
-        comment: "✅ API Services properly implemented with axios instance, correct backend URL (https://reel2trip.preview.emergentagent.com/api), comprehensive endpoints for all features (reels, users, day plans, AI planning, chatbot, saved reels), proper TypeScript interfaces, React Query integration, request/response logging, and 30s timeout configuration. Backend connectivity confirmed from logs."
+        comment: "✅ API Services properly implemented with axios instance, correct backend URL (https://toria-discover-plan.preview.emergentagent.com/api), comprehensive endpoints for all features (reels, users, day plans, AI planning, chatbot, saved reels), proper TypeScript interfaces, React Query integration, request/response logging, and 30s timeout configuration. Backend connectivity confirmed from logs."
 
 metadata:
   created_by: "main_agent"

@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 // Get backend URL from environment
 const BACKEND_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || 
                    process.env.EXPO_PUBLIC_BACKEND_URL || 
-                   'https://reel2trip.preview.emergentagent.com';
+                   'https://toria-discover-plan.preview.emergentagent.com';
 
 // Create axios instance
 const api = axios.create({

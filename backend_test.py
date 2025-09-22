@@ -11,7 +11,7 @@ from datetime import datetime
 import time
 
 # Backend URL from frontend environment
-BASE_URL = "https://reel2trip.preview.emergentagent.com/api"
+BASE_URL = "https://toria-discover-plan.preview.emergentagent.com/api"
 
 class ToriaBackendTester:
     def __init__(self):
