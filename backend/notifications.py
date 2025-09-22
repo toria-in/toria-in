@@ -141,7 +141,7 @@ class NotificationService:
             "suggestions": suggestions
         }
         
-        await self.send_notification(user_id, title, body, data)
+        return await self.send_notification(user_id, title, body, data)
     
     async def send_feedback_reminder(self, user_id: str, completed_stop: str):
         """Send feedback request after completing a stop"""
