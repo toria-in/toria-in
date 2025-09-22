@@ -37,12 +37,12 @@ interface Reel {
   saves: number;
 }
 
-// Move components outside to fix React Hooks violation
-const LocationFilter: React.FC<{
+// LocationFilter component moved outside to fix React Hooks violation
+const LocationFilter = ({ currentLocation, selectedItinerary, onClearItinerary }: {
   currentLocation: string;
   selectedItinerary: string | null;
   onClearItinerary: () => void;
-}> = ({ currentLocation, selectedItinerary, onClearItinerary }) => (
+}) => (
   <View style={styles.filterContainer}>
     <TouchableOpacity style={styles.filterPill}>
       <Ionicons name="location" size={16} color="#ff6b35" />
@@ -63,14 +63,30 @@ const LocationFilter: React.FC<{
   </View>
 );
 
-const ReelCard: React.FC<{
-  reel: Reel;
+// EmptyState component moved outside to fix React Hooks violation
+const EmptyState = ({ currentLocation, onRefresh }: {
+  currentLocation: string;
+  onRefresh: () => void;
+}) => (
+  <View style={styles.emptyState}>
+    <Ionicons name="location-outline" size={64} color="#8e8e93" />
+    <Text style={styles.emptyTitle}>Discovering {currentLocation}</Text>
+    <Text style={styles.emptySubtitle}>
+      We're curating fresh reels for your city. Try another location or check back soon!
+    </Text>
+    <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+      <Text style={styles.retryText}>Refresh</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+// ReelCard component moved outside to fix React Hooks violation
+const ReelCard = ({ item: reel, onUpvote, onSave, onAddToPlan }: { 
+  item: Reel; 
   onUpvote: (id: string) => void;
   onSave: (id: string) => void;
   onAddToPlan: (reel: Reel) => void;
-  isUpvoting: boolean;
-  isSaving: boolean;
-}> = ({ reel, onUpvote, onSave, onAddToPlan, isUpvoting, isSaving }) => {
+}) => {
   const [webViewHeight, setWebViewHeight] = useState(400);
 
   const handleWebViewMessage = (event: any) => {
@@ -205,7 +221,6 @@ const ReelCard: React.FC<{
         <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => onUpvote(reel.id)}
-          disabled={isUpvoting}
         >
           <Ionicons name="thumbs-up" size={20} color="#ff6b35" />
           <Text style={styles.actionText}>{reel.upvotes}</Text>
@@ -214,7 +229,6 @@ const ReelCard: React.FC<{
         <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => onSave(reel.id)}
-          disabled={isSaving}
         >
           <Ionicons name="bookmark" size={20} color="#ff6b35" />
           <Text style={styles.actionText}>Save</Text>
@@ -232,55 +246,13 @@ const ReelCard: React.FC<{
   );
 };
 
-const EmptyState: React.FC<{
-  currentLocation: string;
-  onRefresh: () => void;
-}> = ({ currentLocation, onRefresh }) => (
-  <View style={styles.emptyState}>
-    <Ionicons name="location-outline" size={64} color="#8e8e93" />
-    <Text style={styles.emptyTitle}>Discovering {currentLocation}</Text>
-    <Text style={styles.emptySubtitle}>
-      We're curating fresh reels for your city. Try another location or check back soon!
-    </Text>
-    <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-      <Text style={styles.retryText}>Refresh</Text>
-    </TouchableOpacity>
-  </View>
-);
-
 const DiscoverScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const [currentLocation, setCurrentLocation] = useState<string>('Delhi');
   const [selectedItinerary, setSelectedItinerary] = useState<string | null>(null);
   const [userId] = useState<string>('user-demo-123'); // Mock user ID
 
-  // All hooks called at the top level - no conditional calls
-  const {
-    data: reels = [],
-    isLoading,
-    refetch,
-    isRefetching,
-  } = useQuery({
-    queryKey: ['reels', currentLocation, selectedItinerary],
-    queryFn: () => fetchReels({ location: currentLocation }),
-    enabled: !!currentLocation,
-  });
-
-  const upvoteMutation = useMutation({
-    mutationFn: upvoteReel,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reels'] });
-    },
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: ({ reelId }: { reelId: string }) => saveReel(reelId, userId),
-    onSuccess: () => {
-      Alert.alert('Saved!', 'Reel saved to your favorites');
-    },
-  });
-
-  // Get location permission - effect after all hooks
+  // Get location permission and current location
   useEffect(() => {
     getLocationPermission();
   }, []);
@@ -310,6 +282,34 @@ const DiscoverScreen: React.FC = () => {
       console.log('Location error:', error);
     }
   };
+
+  // Fetch reels based on location and filters
+  const {
+    data: reels = [],
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: ['reels', currentLocation, selectedItinerary],
+    queryFn: () => fetchReels({ location: currentLocation }),
+    enabled: !!currentLocation, // Only run query when location is available
+  });
+
+  // Upvote mutation
+  const upvoteMutation = useMutation({
+    mutationFn: upvoteReel,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reels'] });
+    },
+  });
+
+  // Save reel mutation
+  const saveMutation = useMutation({
+    mutationFn: ({ reelId }: { reelId: string }) => saveReel(reelId, userId),
+    onSuccess: () => {
+      Alert.alert('Saved!', 'Reel saved to your favorites');
+    },
+  });
 
   const handleUpvote = (reelId: string) => {
     upvoteMutation.mutate(reelId);
@@ -341,27 +341,175 @@ const DiscoverScreen: React.FC = () => {
     );
   };
 
-  const handleClearItinerary = () => {
-    setSelectedItinerary(null);
+  // Components moved outside to fix React Hooks violation
+
+    const handleWebViewMessage = (event: any) => {
+      try {
+        const { height } = JSON.parse(event.nativeEvent.data);
+        if (height) {
+          setWebViewHeight(Math.min(height, screenHeight * 0.6));
+        }
+      } catch (error) {
+        console.log('WebView message error:', error);
+      }
+    };
+
+    const injectedJavaScript = `
+      (function() {
+        function sendHeight() {
+          const height = document.documentElement.scrollHeight;
+          window.ReactNativeWebView.postMessage(JSON.stringify({ height }));
+        }
+        
+        setTimeout(sendHeight, 1000);
+        
+        // Auto-resize Instagram embeds
+        if (window.instgrm) {
+          window.instgrm.Embeds.process();
+        }
+        
+        // Listen for Instagram embed load
+        document.addEventListener('DOMContentLoaded', function() {
+          setTimeout(sendHeight, 2000);
+        });
+        
+        true;
+      })();
+    `;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              margin: 0;
+              padding: 16px;
+              background-color: #1a1a1a;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+            .instagram-media {
+              background: white !important;
+              border-radius: 8px !important;
+              max-width: 100% !important;
+              margin: 0 auto !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${reel.embed_code}
+          <script async src="//www.instagram.com/embed.js"></script>
+        </body>
+      </html>
+    `;
+
+    return (
+      <View style={styles.reelCard}>
+        {/* Header */}
+        <View style={styles.reelHeader}>
+          <View style={styles.reelInfo}>
+            <Text style={styles.reelTitle}>{reel.title}</Text>
+            <Text style={styles.reelLocation}>
+              <Ionicons name="location-outline" size={12} color="#8e8e93" />
+              {' '}{reel.location}
+            </Text>
+          </View>
+          <View style={styles.reelMeta}>
+            {reel.creator_handle && (
+              <Text style={styles.creatorHandle}>{reel.creator_handle}</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Chips */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsContainer}
+        >
+          <View style={[styles.chip, { backgroundColor: reel.type === 'Food' ? '#ff6b35' : '#4CAF50' }]}>
+            <Text style={styles.chipText}>{reel.type}</Text>
+          </View>
+          {reel.metadata.price && (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{reel.metadata.price}</Text>
+            </View>
+          )}
+          {reel.metadata.hygiene && (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{reel.metadata.hygiene}</Text>
+            </View>
+          )}
+          {reel.metadata.vibe && (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{reel.metadata.vibe}</Text>
+            </View>
+          )}
+          {reel.metadata.timing && (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{reel.metadata.timing}</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Instagram Embed */}
+        <View style={[styles.webViewContainer, { height: webViewHeight }]}>
+          <WebView
+            source={{ html: htmlContent }}
+            style={styles.webView}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            scalesPageToFit={true}
+            scrollEnabled={false}
+            onMessage={handleWebViewMessage}
+            injectedJavaScript={injectedJavaScript}
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+          />
+        </View>
+
+        {/* Actions */}
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleUpvote(reel.id)}
+            disabled={upvoteMutation.isPending}
+          >
+            <Ionicons name="thumbs-up" size={20} color="#ff6b35" />
+            <Text style={styles.actionText}>{reel.upvotes}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleSave(reel.id)}
+            disabled={saveMutation.isPending}
+          >
+            <Ionicons name="bookmark" size={20} color="#ff6b35" />
+            <Text style={styles.actionText}>Save</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.addButton]}
+            onPress={() => handleAddToPlan(reel)}
+          >
+            <Ionicons name="add-circle" size={20} color="#ffffff" />
+            <Text style={[styles.actionText, { color: '#ffffff' }]}>Add to Plan</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
-  const renderReelCard = ({ item }: { item: Reel }) => (
-    <ReelCard
-      reel={item}
-      onUpvote={handleUpvote}
-      onSave={handleSave}
-      onAddToPlan={handleAddToPlan}
-      isUpvoting={upvoteMutation.isPending}
-      isSaving={saveMutation.isPending}
-    />
-  );
+  // EmptyState moved outside component
 
   return (
     <SafeAreaView style={styles.container}>
-      <LocationFilter
+      <LocationFilter 
         currentLocation={currentLocation}
         selectedItinerary={selectedItinerary}
-        onClearItinerary={handleClearItinerary}
+        onClearItinerary={() => setSelectedItinerary(null)}
       />
       
       {isLoading ? (
@@ -369,14 +517,21 @@ const DiscoverScreen: React.FC = () => {
           <Text style={styles.loadingText}>Discovering amazing places...</Text>
         </View>
       ) : reels.length === 0 ? (
-        <EmptyState
+        <EmptyState 
           currentLocation={currentLocation}
           onRefresh={refetch}
         />
       ) : (
         <FlashList
           data={reels}
-          renderItem={renderReelCard}
+          renderItem={({ item }) => (
+            <ReelCard 
+              item={item} 
+              onUpvote={handleUpvote}
+              onSave={handleSave}
+              onAddToPlan={handleAddToPlan}
+            />
+          )}
           keyExtractor={(item) => item.id}
           estimatedItemSize={500}
           showsVerticalScrollIndicator={false}
