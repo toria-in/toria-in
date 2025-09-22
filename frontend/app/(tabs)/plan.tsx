@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,156 +6,385 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Modal,
+  FlatList,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useMutation } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
-import { router } from 'expo-router';
 
-import { planMyTrip, getTopPlaces, createDayPlan } from '../services/api';
+import { planMyTrip, getTopPlaces } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/Colors';
 
 interface PlanFormData {
   places: string[];
   goingWith: string;
   focus: string;
-  duration?: string;
-  dateTime?: string;
-  diet?: string;
-  budget?: string;
-  vibe?: string[];
+  duration: number;
+  durationUnit: 'hours' | 'days';
+  date: Date;
+  time: Date;
+  diet: string;
+  budget: string;
+  vibe: string;
 }
+
+const BUDGET_OPTIONS = [
+  { label: 'Budget-friendly (₹500-1000)', value: 'budget' },
+  { label: 'Mid-range (₹1000-2500)', value: 'mid-range' },
+  { label: 'Premium (₹2500-5000)', value: 'premium' },
+  { label: 'Luxury (₹5000+)', value: 'luxury' },
+];
+
+const DURATION_UNITS = [
+  { label: 'Hours', value: 'hours' },
+  { label: 'Days', value: 'days' },
+];
+
+const GOING_WITH_OPTIONS = [
+  { icon: 'heart', label: 'Partner', value: 'partner', color: Colors.partner },
+  { icon: 'people', label: 'Family', value: 'family', color: Colors.family },
+  { icon: 'happy', label: 'Friends', value: 'friends', color: Colors.friends },
+  { icon: 'briefcase', label: 'Business', value: 'business', color: Colors.business },
+  { icon: 'person', label: 'Solo', value: 'solo', color: Colors.solo },
+];
+
+const FOCUS_OPTIONS = [
+  { icon: 'restaurant', label: 'Food', value: 'food', color: Colors.food },
+  { icon: 'location', label: 'Places', value: 'places', color: Colors.place },
+  { icon: 'star', label: 'Both', value: 'both', color: Colors.both },
+];
+
+const DIET_OPTIONS = [
+  { label: 'No Restrictions', value: 'none' },
+  { label: 'Vegetarian', value: 'vegetarian' },
+  { label: 'Vegan', value: 'vegan' },
+  { label: 'Jain', value: 'jain' },
+  { label: 'Halal', value: 'halal' },
+  { label: 'Keto', value: 'keto' },
+];
+
+const VIBE_OPTIONS = [
+  { label: 'Relaxed', value: 'relaxed' },
+  { label: 'Adventure', value: 'adventure' },
+  { label: 'Cultural', value: 'cultural' },
+  { label: 'Nightlife', value: 'nightlife' },
+  { label: 'Nature', value: 'nature' },
+  { label: 'Photography', value: 'photography' },
+];
+
+// Custom dropdown component
+const DropdownSelector: React.FC<{
+  label: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onSelect: (value: string) => void;
+  placeholder?: string;
+}> = ({ label, value, options, onSelect, placeholder }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const selectedOption = options.find(opt => opt.value === value);
+
+  return (
+    <View style={styles.inputContainer}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <TouchableOpacity
+        style={styles.dropdownButton}
+        onPress={() => setIsVisible(true)}
+      >
+        <Text style={[styles.dropdownText, !selectedOption && styles.placeholderText]}>
+          {selectedOption?.label || placeholder || 'Select...'}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color={Colors.primary} />
+      </TouchableOpacity>
+
+      <Modal
+        visible={isVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsVisible(false)}
+        >
+          <View style={styles.dropdownModal}>
+            <FlatList
+              data={options}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.dropdownOption,
+                    item.value === value && styles.selectedOption
+                  ]}
+                  onPress={() => {
+                    onSelect(item.value);
+                    setIsVisible(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.dropdownOptionText,
+                    item.value === value && styles.selectedOptionText
+                  ]}>
+                    {item.label}
+                  </Text>
+                  {item.value === value && (
+                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
+
+// Enhanced duration input with number input and unit dropdown
+const DurationInput: React.FC<{
+  duration: number;
+  unit: 'hours' | 'days';
+  onDurationChange: (duration: number) => void;
+  onUnitChange: (unit: 'hours' | 'days') => void;
+}> = ({ duration, unit, onDurationChange, onUnitChange }) => {
+  const [textValue, setTextValue] = useState(duration.toString());
+
+  const handleTextChange = (text: string) => {
+    setTextValue(text);
+    const numValue = parseInt(text) || 0;
+    if (numValue > 0) {
+      onDurationChange(numValue);
+    }
+  };
+
+  return (
+    <View style={styles.inputContainer}>
+      <Text style={styles.inputLabel}>Duration *</Text>
+      <View style={styles.durationContainer}>
+        <TextInput
+          style={styles.durationInput}
+          value={textValue}
+          onChangeText={handleTextChange}
+          placeholder="Enter duration"
+          placeholderTextColor={Colors.inputPlaceholder}
+          keyboardType="numeric"
+          returnKeyType="done"
+        />
+        <View style={styles.unitSeparator} />
+        <DropdownSelector
+          label=""
+          value={unit}
+          options={DURATION_UNITS}
+          onSelect={(value) => onUnitChange(value as 'hours' | 'days')}
+          placeholder="Unit"
+        />
+      </View>
+    </View>
+  );
+};
+
+// Date and time picker component
+const DateTimeInput: React.FC<{
+  date: Date;
+  time: Date;
+  onDateChange: (date: Date) => void;
+  onTimeChange: (time: Date) => void;
+}> = ({ date, time, onDateChange, onTimeChange }) => {
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const formatTime = (time: Date) => {
+    return time.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  return (
+    <View style={styles.dateTimeContainer}>
+      <View style={styles.dateTimeRow}>
+        <View style={[styles.inputContainer, styles.dateTimeInput]}>
+          <Text style={styles.inputLabel}>Date *</Text>
+          <TouchableOpacity
+            style={styles.dateTimeButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar" size={20} color={Colors.primary} />
+            <Text style={styles.dateTimeText}>{formatDate(date)}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.inputContainer, styles.dateTimeInput]}>
+          <Text style={styles.inputLabel}>Time *</Text>
+          <TouchableOpacity
+            style={styles.dateTimeButton}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Ionicons name="time" size={20} color={Colors.primary} />
+            <Text style={styles.dateTimeText}>{formatTime(time)}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowDatePicker(false);
+            if (selectedDate) {
+              onDateChange(selectedDate);
+            }
+          }}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {showTimePicker && (
+        <DateTimePicker
+          value={time}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            setShowTimePicker(false);
+            if (selectedTime) {
+              onTimeChange(selectedTime);
+            }
+          }}
+        />
+      )}
+    </View>
+  );
+};
 
 const PlanScreen: React.FC = () => {
   const { user } = useAuth();
   const [formData, setFormData] = useState<PlanFormData>({
-    places: [''],
+    places: [],
     goingWith: '',
     focus: '',
-    vibe: [],
+    duration: 1,
+    durationUnit: 'days',
+    date: new Date(),
+    time: new Date(),
+    diet: 'none',
+    budget: 'mid-range',
+    vibe: 'relaxed',
   });
-  
-  const [showResults, setShowResults] = useState(false);
-  const [showBuildYourDay, setShowBuildYourDay] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<any[]>([]);
+
+  const [placesInput, setPlacesInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Plan mutation
-  const planMutation = useMutation({
+  // Mutations for API calls
+  const planTripMutation = useMutation({
     mutationFn: planMyTrip,
     onSuccess: (data) => {
-      setShowResults(true);
-      setShowBuildYourDay(false);
       Toast.show({
         type: 'success',
-        text1: 'Recommendations Ready!',
-        text2: 'AI has generated your travel suggestions',
+        text1: '🎉 Trip Planned!',
+        text2: 'Your personalized itinerary is ready',
       });
+      // Navigate to results or show results
+      console.log('Trip plan result:', data);
     },
     onError: (error) => {
       Toast.show({
         type: 'error',
-        text1: 'Generation Failed',
-        text2: 'Please try again with different details',
+        text1: 'Planning Failed',
+        text2: 'Unable to create your trip plan. Please try again.',
       });
     },
   });
 
-  // Top places mutation
-  const topPlacesMutation = useMutation({
+  const buildDayMutation = useMutation({
     mutationFn: getTopPlaces,
     onSuccess: (data) => {
-      setShowBuildYourDay(true);
-      setShowResults(false);
       Toast.show({
         type: 'success',
-        text1: 'Places Found!',
-        text2: 'Select items to build your day',
+        text1: '🏗️ Day Building Started!',
+        text2: 'Browse top places to add to your itinerary',
+      });
+      console.log('Build day result:', data);
+    },
+    onError: (error) => {
+      Toast.show({
+        type: 'error',
+        text1: 'Build Failed',
+        text2: 'Unable to fetch places. Please try again.',
       });
     },
   });
 
-  // Create day plan mutation
-  const createPlanMutation = useMutation({
-    mutationFn: createDayPlan,
-    onSuccess: () => {
-      Toast.show({
-        type: 'success',
-        text1: 'Day Plan Created!',
-        text2: 'Find it in your profile',
-      });
-      resetForm();
-    },
-  });
-
-  const resetForm = () => {
-    setFormData({
-      places: [''],
-      goingWith: '',
-      focus: '',
-      vibe: [],
-    });
-    setShowResults(false);
-    setShowBuildYourDay(false);
-    setSelectedItems([]);
-    setErrors({});
-  };
-
+  // Form validation
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
-    if (!formData.places[0] || formData.places[0].trim() === '') {
-      newErrors.places = 'At least one place is required';
+
+    if (formData.places.length === 0) {
+      newErrors.places = 'Please add at least one place';
     }
-    
+
     if (!formData.goingWith) {
       newErrors.goingWith = 'Please select who you\'re going with';
     }
-    
+
     if (!formData.focus) {
-      newErrors.focus = 'Please select your focus';
+      newErrors.focus = 'Please select your trip focus';
+    }
+
+    if (formData.duration <= 0) {
+      newErrors.duration = 'Duration must be greater than 0';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const updatePlace = (index: number, value: string) => {
-    const newPlaces = [...formData.places];
-    newPlaces[index] = value;
-    setFormData({ ...formData, places: newPlaces });
-    
-    // Clear error when user starts typing
-    if (errors.places && value.trim()) {
+  // Handle adding places
+  const handleAddPlace = () => {
+    const trimmedInput = placesInput.trim();
+    if (trimmedInput && !formData.places.includes(trimmedInput)) {
+      setFormData(prev => ({
+        ...prev,
+        places: [...prev.places, trimmedInput]
+      }));
+      setPlacesInput('');
       setErrors(prev => ({ ...prev, places: '' }));
     }
   };
 
-  const addPlace = () => {
-    setFormData({ ...formData, places: [...formData.places, ''] });
+  const handleRemovePlace = (place: string) => {
+    setFormData(prev => ({
+      ...prev,
+      places: prev.places.filter(p => p !== place)
+    }));
   };
 
-  const removePlace = (index: number) => {
-    if (formData.places.length > 1) {
-      const newPlaces = formData.places.filter((_, i) => i !== index);
-      setFormData({ ...formData, places: newPlaces });
-    }
-  };
-
-  const toggleVibe = (vibe: string) => {
-    const currentVibes = formData.vibe || [];
-    const newVibes = currentVibes.includes(vibe)
-      ? currentVibes.filter(v => v !== vibe)
-      : [...currentVibes, vibe];
-    setFormData({ ...formData, vibe: newVibes });
-  };
-
+  // Handle Get Toria Recommendations
   const handleGetRecommendations = () => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please sign in to get personalized recommendations');
+      return;
+    }
+
     if (!validateForm()) {
       Toast.show({
         type: 'error',
@@ -165,505 +394,268 @@ const PlanScreen: React.FC = () => {
       return;
     }
 
-    if (!user) {
-      Toast.show({
-        type: 'error',
-        text1: 'Login Required',
-        text2: 'Please sign in to get recommendations',
-      });
-      return;
-    }
-
-    const requestData = {
-      places: formData.places.filter(p => p.trim()),
+    const planData = {
+      places: formData.places,
       going_with: formData.goingWith,
       focus: formData.focus,
       duration: formData.duration,
-      date_time: formData.dateTime,
-      diet: formData.diet,
-      budget: formData.budget,
-      vibe: formData.vibe,
+      duration_unit: formData.durationUnit,
+      date: formData.date.toISOString(),
+      time: formData.time.toISOString(),
+      preferences: {
+        diet: formData.diet,
+        budget: formData.budget,
+        vibe: formData.vibe,
+      },
+      user_id: user.id,
     };
 
-    planMutation.mutate(requestData);
+    planTripMutation.mutate(planData);
   };
 
+  // Handle Build Your Day
   const handleBuildYourDay = () => {
-    if (!validateForm()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Missing Information',
-        text2: 'Please fill in all required fields',
-      });
-      return;
-    }
-
     if (!user) {
+      Alert.alert('Login Required', 'Please sign in to build your day');
+      return;
+    }
+
+    if (formData.places.length === 0) {
       Toast.show({
         type: 'error',
-        text1: 'Login Required',
-        text2: 'Please sign in to build your day',
+        text1: 'Add Places First',
+        text2: 'Please add at least one place to start building',
       });
       return;
     }
 
-    const requestData = {
-      places: formData.places.filter(p => p.trim()),
-      going_with: formData.goingWith,
-      focus: formData.focus,
-      filters: {
-        duration: formData.duration,
+    const buildData = {
+      places: formData.places,
+      focus: formData.focus || 'both',
+      preferences: {
         diet: formData.diet,
         budget: formData.budget,
         vibe: formData.vibe,
       },
     };
 
-    topPlacesMutation.mutate(requestData);
-  };
-
-  const handleCreatePlan = () => {
-    if (!user) {
-      Toast.show({
-        type: 'error',
-        text1: 'Login Required',
-        text2: 'Please sign in to create plans',
-      });
-      return;
-    }
-
-    const planData = {
-      user_id: user.id,
-      title: `${formData.places[0]} - ${formData.goingWith} - ${formData.focus}`,
-      city: formData.places[0],
-      going_with: formData.goingWith,
-      focus: formData.focus,
-      duration: formData.duration,
-      stops: selectedItems,
-      generated_by_ai: showResults,
-    };
-
-    createPlanMutation.mutate(planData);
-  };
-
-  const MandatoryInputs = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Trip Details</Text>
-      
-      {/* Places */}
-      <View style={styles.inputGroup}>
-        <Text style={[styles.inputLabel, errors.places && styles.errorLabel]}>
-          Places *
-        </Text>
-        {formData.places.map((place, index) => (
-          <View key={index} style={styles.placeInputContainer}>
-            <TextInput
-              style={[styles.textInput, errors.places && styles.errorInput]}
-              placeholder="Enter city or place"
-              placeholderTextColor="#8e8e93"
-              value={place}
-              onChangeText={(value) => updatePlace(index, value)}
-            />
-            {formData.places.length > 1 && (
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => removePlace(index)}
-              >
-                <Ionicons name="close-circle" size={24} color="#ff4444" />
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
-        {errors.places && <Text style={styles.errorText}>{errors.places}</Text>}
-        
-        <TouchableOpacity style={styles.addButton} onPress={addPlace}>
-          <Ionicons name="add" size={20} color="#ff6b35" />
-          <Text style={styles.addButtonText}>Add Place</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Going With */}
-      <View style={styles.inputGroup}>
-        <Text style={[styles.inputLabel, errors.goingWith && styles.errorLabel]}>
-          Going With *
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.optionsContainer}>
-            {['friends', 'family', 'partner', 'business', 'solo'].map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.optionButton,
-                  formData.goingWith === option && styles.selectedOption,
-                ]}
-                onPress={() => {
-                  setFormData({ ...formData, goingWith: option });
-                  if (errors.goingWith) {
-                    setErrors(prev => ({ ...prev, goingWith: '' }));
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.optionText,
-                    formData.goingWith === option && styles.selectedOptionText,
-                  ]}
-                >
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-        {errors.goingWith && <Text style={styles.errorText}>{errors.goingWith}</Text>}
-      </View>
-
-      {/* Focus */}
-      <View style={styles.inputGroup}>
-        <Text style={[styles.inputLabel, errors.focus && styles.errorLabel]}>
-          Focus *
-        </Text>
-        <View style={styles.optionsContainer}>
-          {['food', 'attractions', 'both'].map((option) => (
-            <TouchableOpacity
-              key={option}
-              style={[
-                styles.optionButton,
-                formData.focus === option && styles.selectedOption,
-              ]}
-              onPress={() => {
-                setFormData({ ...formData, focus: option });
-                if (errors.focus) {
-                  setErrors(prev => ({ ...prev, focus: '' }));
-                }
-              }}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  formData.focus === option && styles.selectedOptionText,
-                ]}
-              >
-                {option.charAt(0).toUpperCase() + option.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        {errors.focus && <Text style={styles.errorText}>{errors.focus}</Text>}
-      </View>
-    </View>
-  );
-
-  const OptionalFilters = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Optional Filters</Text>
-      
-      {/* Duration */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Duration</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="e.g., 4 hours, Half day, Full day"
-          placeholderTextColor="#8e8e93"
-          value={formData.duration}
-          onChangeText={(value) => setFormData({ ...formData, duration: value })}
-        />
-      </View>
-
-      {/* Date/Time */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Date & Time</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="e.g., Tomorrow evening, Weekend morning"
-          placeholderTextColor="#8e8e93"
-          value={formData.dateTime}
-          onChangeText={(value) => setFormData({ ...formData, dateTime: value })}
-        />
-      </View>
-
-      {/* Contextual Filters */}
-      {(formData.focus === 'food' || formData.focus === 'both') && (
-        <>
-          {/* Diet */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Diet</Text>
-            <View style={styles.optionsContainer}>
-              {['non-veg', 'veg', 'pure veg'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.optionButton,
-                    formData.diet === option && styles.selectedOption,
-                  ]}
-                  onPress={() => setFormData({ ...formData, diet: option })}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      formData.diet === option && styles.selectedOptionText,
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Budget */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Budget</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g., Budget-friendly, Moderate, Premium"
-              placeholderTextColor="#8e8e93"
-              value={formData.budget}
-              onChangeText={(value) => setFormData({ ...formData, budget: value })}
-            />
-          </View>
-
-          {/* Food Vibe */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Vibe</Text>
-            <View style={styles.vibeContainer}>
-              {['drink & dine', 'family', 'romantic', 'party', 'premium', 'buffets', 'religious'].map((vibe) => (
-                <TouchableOpacity
-                  key={vibe}
-                  style={[
-                    styles.vibeButton,
-                    formData.vibe?.includes(vibe) && styles.selectedVibe,
-                  ]}
-                  onPress={() => toggleVibe(vibe)}
-                >
-                  <Text
-                    style={[
-                      styles.vibeText,
-                      formData.vibe?.includes(vibe) && styles.selectedVibeText,
-                    ]}
-                  >
-                    {vibe}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </>
-      )}
-
-      {(formData.focus === 'attractions' || formData.focus === 'both') && (
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Attraction Vibe</Text>
-          <View style={styles.vibeContainer}>
-            {['nature', 'adventure', 'religious', 'culture-history'].map((vibe) => (
-              <TouchableOpacity
-                key={vibe}
-                style={[
-                  styles.vibeButton,
-                  formData.vibe?.includes(vibe) && styles.selectedVibe,
-                ]}
-                onPress={() => toggleVibe(vibe)}
-              >
-                <Text
-                  style={[
-                    styles.vibeText,
-                    formData.vibe?.includes(vibe) && styles.selectedVibeText,
-                  ]}
-                >
-                  {vibe}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-
-  const ActionButtons = () => (
-    <View style={styles.actionSection}>
-      <TouchableOpacity
-        style={[styles.primaryButton, planMutation.isPending && styles.disabledButton]}
-        onPress={handleGetRecommendations}
-        disabled={planMutation.isPending}
-      >
-        {planMutation.isPending ? (
-          <ActivityIndicator color="#ffffff" />
-        ) : (
-          <>
-            <Ionicons name="sparkles" size={20} color="#ffffff" />
-            <Text style={styles.primaryButtonText}>Get Toria Recommendations</Text>
-          </>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.secondaryButton, topPlacesMutation.isPending && styles.disabledButton]}
-        onPress={handleBuildYourDay}
-        disabled={topPlacesMutation.isPending}
-      >
-        {topPlacesMutation.isPending ? (
-          <ActivityIndicator color="#ff6b35" />
-        ) : (
-          <>
-            <Ionicons name="construct" size={20} color="#ff6b35" />
-            <Text style={styles.secondaryButtonText}>Build Your Day</Text>
-          </>
-        )}
-      </TouchableOpacity>
-    </View>
-  );
-
-  const ResultsSection = () => {
-    if (!planMutation.data) return null;
-
-    const { toria_recommended } = planMutation.data;
-
-    return (
-      <View style={styles.resultsSection}>
-        <Text style={styles.resultsTitle}>🌟 Toria Recommended</Text>
-        {toria_recommended.suggestions?.map((item: any, index: number) => (
-          <View key={index} style={styles.suggestionCard}>
-            <View style={styles.suggestionHeader}>
-              <Text style={styles.suggestionName}>{item.name}</Text>
-              <View style={[styles.typeChip, { backgroundColor: item.type === 'Food' ? '#ff6b35' : '#4CAF50' }]}>
-                <Text style={styles.typeChipText}>{item.type}</Text>
-              </View>
-            </View>
-            {item.time && (
-              <Text style={styles.suggestionTime}>
-                <Ionicons name="time" size={12} color="#8e8e93" /> {item.time}
-              </Text>
-            )}
-            {item.reason && (
-              <Text style={styles.suggestionReason}>{item.reason}</Text>
-            )}
-          </View>
-        ))}
-        
-        <TouchableOpacity
-          style={styles.createPlanButton}
-          onPress={handleCreatePlan}
-          disabled={createPlanMutation.isPending}
-        >
-          {createPlanMutation.isPending ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.createPlanText}>Create This Plan</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const BuildYourDaySection = () => {
-    if (!topPlacesMutation.data) return null;
-
-    const { food_places = [], attraction_places = [] } = topPlacesMutation.data;
-
-    return (
-      <View style={styles.resultsSection}>
-        <Text style={styles.resultsTitle}>🛠️ Build Your Day</Text>
-        <Text style={styles.guidanceText}>
-          💡 For ~{formData.duration || '4 hours'}, travelers usually cover 3-5 items
-        </Text>
-
-        {(formData.focus === 'food' || formData.focus === 'both') && (
-          <View style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>🍕 Food Options</Text>
-            {food_places.map((place: any, index: number) => (
-              <TouchableOpacity
-                key={`food-${index}`}
-                style={[
-                  styles.placeCard,
-                  selectedItems.some(item => item.name === place.name) && styles.selectedPlace,
-                ]}
-                onPress={() => {
-                  const isSelected = selectedItems.some(item => item.name === place.name);
-                  if (isSelected) {
-                    setSelectedItems(prev => prev.filter(item => item.name !== place.name));
-                  } else {
-                    setSelectedItems(prev => [...prev, { ...place, type: 'Food' }]);
-                  }
-                }}
-              >
-                <Text style={styles.placeName}>{place.name}</Text>
-                <Text style={styles.placeDetails}>
-                  🍽️ Top dishes: {place.top_dishes?.join(', ')}
-                </Text>
-                <View style={styles.placeMetaContainer}>
-                  <Text style={styles.placeMeta}>{place.price_band}</Text>
-                  <Text style={styles.placeMeta}>{place.hygiene}</Text>
-                  <Text style={styles.placeMeta}>{place.open_hours}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {(formData.focus === 'attractions' || formData.focus === 'both') && (
-          <View style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>🏛️ Places to Visit</Text>
-            {attraction_places.map((place: any, index: number) => (
-              <TouchableOpacity
-                key={`place-${index}`}
-                style={[
-                  styles.placeCard,
-                  selectedItems.some(item => item.name === place.name) && styles.selectedPlace,
-                ]}
-                onPress={() => {
-                  const isSelected = selectedItems.some(item => item.name === place.name);
-                  if (isSelected) {
-                    setSelectedItems(prev => prev.filter(item => item.name !== place.name));
-                  } else {
-                    setSelectedItems(prev => [...prev, { ...place, type: 'Place' }]);
-                  }
-                }}
-              >
-                <Text style={styles.placeName}>{place.name}</Text>
-                <View style={styles.placeMetaContainer}>
-                  {place.vibe_tags?.map((tag: string) => (
-                    <Text key={tag} style={styles.placeMeta}>{tag}</Text>
-                  ))}
-                </View>
-                <Text style={styles.placeDetails}>💰 {place.fee_info} • ⏰ {place.ideal_time}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {selectedItems.length > 0 && (
-          <TouchableOpacity
-            style={styles.createPlanButton}
-            onPress={handleCreatePlan}
-            disabled={createPlanMutation.isPending}
-          >
-            {createPlanMutation.isPending ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.createPlanText}>
-                Create Plan with {selectedItems.length} items
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-    );
+    buildDayMutation.mutate(buildData);
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <SafeAreaView style={styles.container}>
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          <MandatoryInputs />
-          <OptionalFilters />
-          <ActionButtons />
-          
-          {showResults && <ResultsSection />}
-          {showBuildYourDay && <BuildYourDaySection />}
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={[styles.title, Typography.h2]}>Plan Your Trip</Text>
+            <Text style={[styles.subtitle, Typography.body2]}>
+              Tell us what you're looking for and we'll create the perfect itinerary
+            </Text>
+          </View>
+
+          {/* Mandatory Inputs Section */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, Typography.h4]}>Trip Details</Text>
+            
+            {/* Places Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Places to Visit *</Text>
+              <View style={styles.placesInputContainer}>
+                <TextInput
+                  style={styles.textInput}
+                  value={placesInput}
+                  onChangeText={setPlacesInput}
+                  placeholder="Add a place (e.g. Delhi, Connaught Place)"
+                  placeholderTextColor={Colors.inputPlaceholder}
+                  returnKeyType="done"
+                  onSubmitEditing={handleAddPlace}
+                  blurOnSubmit={false}
+                />
+                <TouchableOpacity
+                  style={styles.addPlaceButton}
+                  onPress={handleAddPlace}
+                  disabled={!placesInput.trim()}
+                >
+                  <Ionicons name="add" size={20} color={Colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Places Tags */}
+              {formData.places.length > 0 && (
+                <View style={styles.placesContainer}>
+                  {formData.places.map((place, index) => (
+                    <View key={index} style={styles.placeTag}>
+                      <Text style={styles.placeTagText}>{place}</Text>
+                      <TouchableOpacity
+                        onPress={() => handleRemovePlace(place)}
+                        style={styles.removeTagButton}
+                      >
+                        <Ionicons name="close" size={16} color={Colors.textPrimary} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {errors.places && (
+                <Text style={styles.errorText}>{errors.places}</Text>
+              )}
+            </View>
+
+            {/* Going With Selection */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Going With *</Text>
+              <View style={styles.optionsGrid}>
+                {GOING_WITH_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.optionCard,
+                      formData.goingWith === option.value && styles.selectedCard,
+                      { borderColor: option.color }
+                    ]}
+                    onPress={() => {
+                      setFormData(prev => ({ ...prev, goingWith: option.value }));
+                      setErrors(prev => ({ ...prev, goingWith: '' }));
+                    }}
+                  >
+                    <View style={[styles.optionIcon, { backgroundColor: option.color }]}>
+                      <Ionicons name={option.icon as any} size={20} color={Colors.textPrimary} />
+                    </View>
+                    <Text style={[
+                      styles.optionText,
+                      formData.goingWith === option.value && styles.selectedOptionText
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {errors.goingWith && (
+                <Text style={styles.errorText}>{errors.goingWith}</Text>
+              )}
+            </View>
+
+            {/* Focus Selection */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Trip Focus *</Text>
+              <View style={styles.focusContainer}>
+                {FOCUS_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.focusCard,
+                      formData.focus === option.value && styles.selectedFocusCard,
+                      { borderColor: option.color }
+                    ]}
+                    onPress={() => {
+                      setFormData(prev => ({ ...prev, focus: option.value }));
+                      setErrors(prev => ({ ...prev, focus: '' }));
+                    }}
+                  >
+                    <View style={[styles.focusIcon, { backgroundColor: option.color }]}>
+                      <Ionicons name={option.icon as any} size={24} color={Colors.textPrimary} />
+                    </View>
+                    <Text style={[
+                      styles.focusText,
+                      formData.focus === option.value && styles.selectedFocusText
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {errors.focus && (
+                <Text style={styles.errorText}>{errors.focus}</Text>
+              )}
+            </View>
+
+            {/* Duration Input */}
+            <DurationInput
+              duration={formData.duration}
+              unit={formData.durationUnit}
+              onDurationChange={(duration) => setFormData(prev => ({ ...prev, duration }))}
+              onUnitChange={(unit) => setFormData(prev => ({ ...prev, durationUnit: unit }))}
+            />
+
+            {/* Date and Time */}
+            <DateTimeInput
+              date={formData.date}
+              time={formData.time}
+              onDateChange={(date) => setFormData(prev => ({ ...prev, date }))}
+              onTimeChange={(time) => setFormData(prev => ({ ...prev, time }))}
+            />
+          </View>
+
+          {/* Optional Preferences Section */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, Typography.h4]}>Preferences</Text>
+            
+            {/* Diet Preferences */}
+            <DropdownSelector
+              label="Diet Preferences"
+              value={formData.diet}
+              options={DIET_OPTIONS}
+              onSelect={(value) => setFormData(prev => ({ ...prev, diet: value }))}
+            />
+
+            {/* Budget */}
+            <DropdownSelector
+              label="Budget Range"
+              value={formData.budget}
+              options={BUDGET_OPTIONS}
+              onSelect={(value) => setFormData(prev => ({ ...prev, budget: value }))}
+            />
+
+            {/* Vibe */}
+            <DropdownSelector
+              label="Trip Vibe"
+              value={formData.vibe}
+              options={VIBE_OPTIONS}
+              onSelect={(value) => setFormData(prev => ({ ...prev, vibe: value }))}
+            />
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                planTripMutation.isPending && styles.buttonDisabled
+              ]}
+              onPress={handleGetRecommendations}
+              disabled={planTripMutation.isPending}
+            >
+              <View style={styles.buttonContent}>
+                <Ionicons name="sparkles" size={20} color={Colors.textPrimary} />
+                <Text style={styles.primaryButtonText}>
+                  {planTripMutation.isPending ? 'Creating...' : 'Get Toria Recommendations'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.secondaryButton,
+                buildDayMutation.isPending && styles.buttonDisabled
+              ]}
+              onPress={handleBuildYourDay}
+              disabled={buildDayMutation.isPending}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {buildDayMutation.isPending ? 'Loading...' : 'Build Your Day'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -673,274 +665,298 @@ const PlanScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: Colors.backgroundPrimary,
+  },
+  safeArea: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  scrollContent: {
+    paddingBottom: Spacing.xl,
+  },
+  header: {
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.l,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  title: {
+    marginBottom: Spacing.s,
+    color: Colors.textPrimary,
+  },
+  subtitle: {
+    color: Colors.textSecondary,
+    lineHeight: 20,
   },
   section: {
-    marginBottom: 32,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.l,
   },
   sectionTitle: {
-    color: '#ffffff',
-    fontSize: 20,
+    marginBottom: Spacing.m,
+    color: Colors.primary,
     fontWeight: '700',
-    marginBottom: 20,
   },
-  inputGroup: {
-    marginBottom: 20,
+  inputContainer: {
+    marginBottom: Spacing.l,
   },
   inputLabel: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  errorLabel: {
-    color: '#ff4444',
+    ...Typography.inputLabel,
+    marginBottom: Spacing.s,
+    color: Colors.textPrimary,
   },
   textInput: {
-    backgroundColor: '#2a2a2a',
-    color: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
+    ...Typography.inputText,
+    backgroundColor: Colors.inputBackground,
     borderWidth: 1,
-    borderColor: '#3a3a3a',
+    borderColor: Colors.inputBorder,
+    borderRadius: BorderRadius.l,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    minHeight: 48,
   },
-  errorInput: {
-    borderColor: '#ff4444',
-  },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  placeInputContainer: {
+  placesInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
   },
-  removeButton: {
-    marginLeft: 12,
+  addPlaceButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.m,
+    padding: Spacing.s,
+    marginLeft: Spacing.s,
   },
-  addButton: {
+  placesContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 107, 53, 0.1)',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#ff6b35',
-    borderStyle: 'dashed',
-    gap: 8,
-  },
-  addButtonText: {
-    color: '#ff6b35',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    gap: 8,
     flexWrap: 'wrap',
+    marginTop: Spacing.s,
+    gap: Spacing.s,
   },
-  optionButton: {
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#3a3a3a',
+  placeTag: {
+    backgroundColor: Colors.backgroundAccent,
+    borderRadius: BorderRadius.l,
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  selectedOption: {
-    backgroundColor: '#ff6b35',
-    borderColor: '#ff6b35',
-  },
-  optionText: {
-    color: '#ffffff',
+  placeTagText: {
+    color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '500',
   },
-  selectedOptionText: {
-    color: '#ffffff',
+  removeTagButton: {
+    padding: 2,
   },
-  vibeContainer: {
+  optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Spacing.s,
   },
-  vibeButton: {
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#3a3a3a',
+  optionCard: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 2,
+    borderRadius: BorderRadius.l,
+    padding: Spacing.s,
+    alignItems: 'center',
+    ...Shadows.small,
   },
-  selectedVibe: {
-    backgroundColor: 'rgba(255, 107, 53, 0.2)',
-    borderColor: '#ff6b35',
+  selectedCard: {
+    backgroundColor: Colors.backgroundAccent,
+    borderColor: Colors.primary,
   },
-  vibeText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  selectedVibeText: {
-    color: '#ff6b35',
-  },
-  actionSection: {
-    marginBottom: 32,
-    gap: 16,
-  },
-  primaryButton: {
-    backgroundColor: '#ff6b35',
-    flexDirection: 'row',
+  optionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
+    marginBottom: Spacing.s,
   },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+  optionText: {
+    ...Typography.body2,
+    textAlign: 'center',
+    color: Colors.textSecondary,
+  },
+  selectedOptionText: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  focusContainer: {
+    flexDirection: 'row',
+    gap: Spacing.s,
+  },
+  focusCard: {
+    flex: 1,
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 2,
+    borderRadius: BorderRadius.l,
+    padding: Spacing.m,
+    alignItems: 'center',
+    ...Shadows.small,
+  },
+  selectedFocusCard: {
+    backgroundColor: Colors.backgroundAccent,
+    borderColor: Colors.primary,
+  },
+  focusIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.s,
+  },
+  focusText: {
+    ...Typography.body2,
+    textAlign: 'center',
+    color: Colors.textSecondary,
+  },
+  selectedFocusText: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  durationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  durationInput: {
+    ...Typography.inputText,
+    flex: 2,
+    backgroundColor: Colors.inputBackground,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: BorderRadius.l,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    minHeight: 48,
+    textAlign: 'center',
+  },
+  unitSeparator: {
+    width: Spacing.s,
+  },
+  dateTimeContainer: {
+    marginBottom: Spacing.l,
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: Spacing.s,
+  },
+  dateTimeInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  dateTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.inputBackground,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: BorderRadius.l,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    minHeight: 48,
+    gap: Spacing.s,
+  },
+  dateTimeText: {
+    ...Typography.inputText,
+    flex: 1,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.inputBackground,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: BorderRadius.l,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    minHeight: 48,
+  },
+  dropdownText: {
+    ...Typography.inputText,
+    flex: 1,
+  },
+  placeholderText: {
+    color: Colors.inputPlaceholder,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: Colors.modalBackdrop,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownModal: {
+    backgroundColor: Colors.backgroundPrimary,
+    borderRadius: BorderRadius.l,
+    margin: Spacing.m,
+    maxHeight: 300,
+    minWidth: 250,
+    ...Shadows.large,
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  selectedOption: {
+    backgroundColor: Colors.backgroundAccent,
+  },
+  dropdownOptionText: {
+    ...Typography.body1,
+    flex: 1,
+  },
+  selectedOptionText: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  actionsContainer: {
+    paddingHorizontal: Spacing.m,
+    gap: Spacing.m,
+  },
+  primaryButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.l,
+    paddingVertical: Spacing.m,
+    alignItems: 'center',
+    ...Shadows.medium,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: '#ff6b35',
-    flexDirection: 'row',
+    borderColor: Colors.primary,
+    borderRadius: BorderRadius.l,
+    paddingVertical: Spacing.m,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
   },
-  secondaryButtonText: {
-    color: '#ff6b35',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  disabledButton: {
+  buttonDisabled: {
     opacity: 0.6,
   },
-  resultsSection: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 32,
-  },
-  resultsTitle: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  guidanceText: {
-    color: '#8e8e93',
-    fontSize: 14,
-    marginBottom: 16,
-    fontStyle: 'italic',
-  },
-  suggestionCard: {
-    backgroundColor: '#3a3a3a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  suggestionHeader: {
+  buttonContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: Spacing.s,
   },
-  suggestionName: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
+  primaryButtonText: {
+    ...Typography.button,
+    color: Colors.textPrimary,
   },
-  typeChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  secondaryButtonText: {
+    ...Typography.buttonSecondary,
+    color: Colors.primary,
   },
-  typeChipText: {
-    color: '#ffffff',
+  errorText: {
+    color: Colors.error,
     fontSize: 12,
-    fontWeight: '600',
-  },
-  suggestionTime: {
-    color: '#8e8e93',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  suggestionReason: {
-    color: '#ffffff',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  categorySection: {
-    marginBottom: 24,
-  },
-  categoryTitle: {
-    color: '#ff6b35',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  placeCard: {
-    backgroundColor: '#3a3a3a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  selectedPlace: {
-    borderColor: '#ff6b35',
-    backgroundColor: 'rgba(255, 107, 53, 0.1)',
-  },
-  placeName: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  placeDetails: {
-    color: '#8e8e93',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  placeMetaContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  placeMeta: {
-    color: '#ff6b35',
-    fontSize: 12,
-    backgroundColor: 'rgba(255, 107, 53, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  createPlanButton: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  createPlanText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    marginTop: 4,
   },
 });
 
