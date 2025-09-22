@@ -17,7 +17,7 @@ import { useMutation } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 
-import { planMyTrip, getTopPlaces, createDayPlan } from '../../services/api';
+import { planMyTrip, getTopPlaces, createDayPlan } from '../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface PlanFormData {
