@@ -37,6 +37,172 @@ interface Reel {
   saves: number;
 }
 
+// ReelCard component moved outside to fix React Hooks violation
+const ReelCard = ({ item: reel, onUpvote, onSave, onAddToPlan }: { 
+  item: Reel; 
+  onUpvote: (id: string) => void;
+  onSave: (id: string) => void;
+  onAddToPlan: (reel: Reel) => void;
+}) => {
+  const [webViewHeight, setWebViewHeight] = useState(400);
+
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const { height } = JSON.parse(event.nativeEvent.data);
+      if (height) {
+        setWebViewHeight(Math.min(height, screenHeight * 0.6));
+      }
+    } catch (error) {
+      console.log('WebView message error:', error);
+    }
+  };
+
+  const injectedJavaScript = `
+    (function() {
+      function sendHeight() {
+        const height = document.documentElement.scrollHeight;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ height }));
+      }
+      
+      setTimeout(sendHeight, 1000);
+      
+      // Auto-resize Instagram embeds
+      if (window.instgrm) {
+        window.instgrm.Embeds.process();
+      }
+      
+      // Listen for Instagram embed load
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(sendHeight, 2000);
+      });
+      
+      true;
+    })();
+  `;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body {
+            margin: 0;
+            padding: 16px;
+            background-color: #1a1a1a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          }
+          .instagram-media {
+            background: white !important;
+            border-radius: 8px !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+          }
+        </style>
+      </head>
+      <body>
+        ${reel.embed_code}
+        <script async src="//www.instagram.com/embed.js"></script>
+      </body>
+    </html>
+  `;
+
+  return (
+    <View style={styles.reelCard}>
+      {/* Header */}
+      <View style={styles.reelHeader}>
+        <View style={styles.reelInfo}>
+          <Text style={styles.reelTitle}>{reel.title}</Text>
+          <Text style={styles.reelLocation}>
+            <Ionicons name="location-outline" size={12} color="#8e8e93" />
+            {' '}{reel.location}
+          </Text>
+        </View>
+        <View style={styles.reelMeta}>
+          {reel.creator_handle && (
+            <Text style={styles.creatorHandle}>{reel.creator_handle}</Text>
+          )}
+        </View>
+      </View>
+
+      {/* Chips */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsContainer}
+      >
+        <View style={[styles.chip, { backgroundColor: reel.type === 'Food' ? '#ff6b35' : '#4CAF50' }]}>
+          <Text style={styles.chipText}>{reel.type}</Text>
+        </View>
+        {reel.metadata.price && (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>{reel.metadata.price}</Text>
+          </View>
+        )}
+        {reel.metadata.hygiene && (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>{reel.metadata.hygiene}</Text>
+          </View>
+        )}
+        {reel.metadata.vibe && (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>{reel.metadata.vibe}</Text>
+          </View>
+        )}
+        {reel.metadata.timing && (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>{reel.metadata.timing}</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Instagram Embed */}
+      <View style={[styles.webViewContainer, { height: webViewHeight }]}>
+        <WebView
+          source={{ html: htmlContent }}
+          style={styles.webView}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={true}
+          scalesPageToFit={true}
+          scrollEnabled={false}
+          onMessage={handleWebViewMessage}
+          injectedJavaScript={injectedJavaScript}
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+        />
+      </View>
+
+      {/* Actions */}
+      <View style={styles.actionsContainer}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => onUpvote(reel.id)}
+        >
+          <Ionicons name="thumbs-up" size={20} color="#ff6b35" />
+          <Text style={styles.actionText}>{reel.upvotes}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => onSave(reel.id)}
+        >
+          <Ionicons name="bookmark" size={20} color="#ff6b35" />
+          <Text style={styles.actionText}>Save</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.addButton]}
+          onPress={() => onAddToPlan(reel)}
+        >
+          <Ionicons name="add-circle" size={20} color="#ffffff" />
+          <Text style={[styles.actionText, { color: '#ffffff' }]}>Add to Plan</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 const DiscoverScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const [currentLocation, setCurrentLocation] = useState<string>('Delhi');
@@ -152,8 +318,6 @@ const DiscoverScreen: React.FC = () => {
       )}
     </View>
   );
-
-  const ReelCard = ({ item: reel }: { item: Reel }) => {
     const [webViewHeight, setWebViewHeight] = useState(400);
 
     const handleWebViewMessage = (event: any) => {
