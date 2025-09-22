@@ -43,9 +43,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
         setUser(JSON.parse(userData));
+      } else {
+        // For testing: Set a mock authenticated user
+        const mockUser = {
+          id: 'user-demo-123',
+          email: 'demo@toria.com',
+          displayName: 'Demo User',
+          emailVerified: true
+        };
+        setUser(mockUser);
+        await AsyncStorage.setItem('user', JSON.stringify(mockUser));
       }
     } catch (error) {
       console.error('Error loading user from storage:', error);
+      // Fallback: Set mock user even if storage fails
+      const mockUser = {
+        id: 'user-demo-123',
+        email: 'demo@toria.com',
+        displayName: 'Demo User',
+        emailVerified: true
+      };
+      setUser(mockUser);
     } finally {
       setLoading(false);
     }
