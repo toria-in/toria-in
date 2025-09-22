@@ -71,8 +71,6 @@ const ReelCard: React.FC<{
   isUpvoting: boolean;
   isSaving: boolean;
 }> = ({ reel, onUpvote, onSave, onAddToPlan, isUpvoting, isSaving }) => {
-  const [webViewHeight, setWebViewHeight] = useState(400);
-
   // Create a beautiful native reel display instead of WebView
 
   return (
