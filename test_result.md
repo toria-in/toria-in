@@ -222,11 +222,11 @@ frontend:
 
   - task: "Profile Screen"
     implemented: true
-    working: false
-    file: "/app/frontend/app/screens/ProfileScreen.tsx"
+    working: "NA"
+    file: "/app/frontend/app/profile.tsx"
     stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: false
         agent: "main"
@@ -234,6 +234,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ Cannot test properly due to NavigationContainer error. Screen implementation appears complete with profile header (Travel Explorer), tab navigation (My Day Plans, Saved Reels, My Content), day plan management with status tracking (current/upcoming/past), saved reels grid layout, and content statistics dashboard."
+      - working: "NA"
+        agent: "testing"
+        comment: "Cannot test due to React Hooks violation in Discover screen preventing app from rendering properly. Profile screen implementation appears complete with comprehensive features including internal tab navigation, day plan management, saved reels grid, and content statistics. Needs testing once Discover screen hooks issue is resolved."
 
   - task: "API Services Integration"
     implemented: true
