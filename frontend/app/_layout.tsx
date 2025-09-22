@@ -118,7 +118,9 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <InitialLayout />
+        <PlanProvider>
+          <InitialLayout />
+        </PlanProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
