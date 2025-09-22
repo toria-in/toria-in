@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { FlashList } from '@shopify/flash-list';
-import { LinearGradient } from 'expo-linear-gradient';
 import Modal from 'react-native-modal';
 import Toast from 'react-native-toast-message';
 
@@ -69,9 +68,8 @@ const CitySelectionModal: React.FC<{
       animationIn="slideInUp"
       animationOut="slideOutDown"
     >
-      <LinearGradient
-        colors={[Colors.backgroundSecondary, Colors.backgroundTertiary]}
-        style={styles.modalContent}
+      <View
+        style={[styles.modalContent, { backgroundColor: Colors.backgroundSecondary }]}
       >
         <View style={styles.modalHeader}>
           <Text style={[styles.modalTitle, Typography.h3]}>Select City</Text>
@@ -119,7 +117,7 @@ const CitySelectionModal: React.FC<{
             </TouchableOpacity>
           ))}
         </ScrollView>
-      </LinearGradient>
+      </View>
     </Modal>
   );
 };
@@ -142,9 +140,8 @@ const AddToPlanModal: React.FC<{
       animationIn="slideInUp"
       animationOut="slideOutDown"
     >
-      <LinearGradient
-        colors={[Colors.backgroundSecondary, Colors.backgroundTertiary]}
-        style={styles.bottomModalContent}
+      <View
+        style={[styles.bottomModalContent, { backgroundColor: Colors.backgroundSecondary }]}
       >
         <View style={[styles.modalHandle, { backgroundColor: Colors.textMuted }]} />
         
@@ -160,12 +157,11 @@ const AddToPlanModal: React.FC<{
             trackEvent('reel_add_to_plan', { reel_id: reel?.id, plan_type: 'new' });
           }}
         >
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryLight]}
-            style={styles.planOptionIcon}
+          <View
+            style={[styles.planOptionIcon, { backgroundColor: Colors.primary }]}
           >
             <Ionicons name="add-circle" size={24} color={Colors.textPrimary} />
-          </LinearGradient>
+          </View>
           <View style={styles.planOptionContent}>
             <Text style={styles.planOptionTitle}>New Day Plan</Text>
             <Text style={styles.planOptionSubtitle}>Create a new plan for {reel?.location}</Text>
@@ -180,12 +176,11 @@ const AddToPlanModal: React.FC<{
             trackEvent('reel_add_to_plan', { reel_id: reel?.id, plan_type: 'existing' });
           }}
         >
-          <LinearGradient
-            colors={[Colors.secondary, Colors.secondaryLight]}
-            style={styles.planOptionIcon}
+          <View
+            style={[styles.planOptionIcon, { backgroundColor: Colors.secondary }]}
           >
             <Ionicons name="calendar" size={24} color={Colors.textPrimary} />
-          </LinearGradient>
+          </View>
           <View style={styles.planOptionContent}>
             <Text style={styles.planOptionTitle}>Existing Plan</Text>
             <Text style={styles.planOptionSubtitle}>Add to upcoming plan</Text>
@@ -199,7 +194,7 @@ const AddToPlanModal: React.FC<{
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
     </Modal>
   );
 };
@@ -213,14 +208,13 @@ const LocationFilter: React.FC<{
 }> = ({ currentLocation, selectedItinerary, onLocationPress, onClearItinerary }) => (
   <View style={styles.filterContainer}>
     <TouchableOpacity style={styles.filterPill} onPress={onLocationPress}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.filterGradient}
+      <View
+        style={[styles.filterGradient, { backgroundColor: Colors.primary }]}
       >
         <Ionicons name="location" size={16} color={Colors.textPrimary} />
         <Text style={styles.filterText}>{currentLocation}</Text>
         <Ionicons name="chevron-down" size={16} color={Colors.textPrimary} />
-      </LinearGradient>
+      </View>
     </TouchableOpacity>
     
     {selectedItinerary && (
@@ -228,14 +222,13 @@ const LocationFilter: React.FC<{
         style={[styles.filterPill, styles.itineraryPill]}
         onPress={onClearItinerary}
       >
-        <LinearGradient
-          colors={[Colors.success, Colors.successLight]}
-          style={styles.filterGradient}
+        <View
+          style={[styles.filterGradient, { backgroundColor: Colors.success }]}
         >
           <Ionicons name="map" size={16} color={Colors.textPrimary} />
           <Text style={[styles.filterText, { color: Colors.textPrimary }]}>My Plan</Text>
           <Ionicons name="close" size={16} color={Colors.textPrimary} />
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     )}
   </View>
@@ -262,12 +255,11 @@ const ReelCard: React.FC<{
         </View>
         <View style={styles.reelMeta}>
           {reel.creator_handle && (
-            <LinearGradient
-              colors={[Colors.accent, Colors.accentLight]}
-              style={styles.creatorBadge}
+            <View
+              style={[styles.creatorBadge, { backgroundColor: Colors.accent }]}
             >
               <Text style={styles.creatorHandle}>{reel.creator_handle}</Text>
-            </LinearGradient>
+            </View>
           )}
         </View>
       </View>
@@ -278,9 +270,8 @@ const ReelCard: React.FC<{
         showsHorizontalScrollIndicator={false}
         style={styles.chipsContainer}
       >
-        <LinearGradient
-          colors={reel.type === 'Food' ? [Colors.food, '#FF8F00'] : [Colors.place, '#00E676']}
-          style={styles.chip}
+        <View
+          style={[styles.chip, { backgroundColor: reel.type === 'Food' ? Colors.food : Colors.place }]}
         >
           <Ionicons 
             name={reel.type === 'Food' ? 'restaurant' : 'location'} 
@@ -288,7 +279,7 @@ const ReelCard: React.FC<{
             color={Colors.textPrimary} 
           />
           <Text style={styles.chipText}>{reel.type}</Text>
-        </LinearGradient>
+        </View>
         
         {reel.metadata.price && (
           <View style={[styles.chip, { backgroundColor: Colors.backgroundAccent }]}>
@@ -312,23 +303,18 @@ const ReelCard: React.FC<{
 
       {/* Enhanced Native Reel Display */}
       <View style={styles.reelDisplay}>
-        <LinearGradient
-          colors={['#FF408150', '#00BCD450']}
-          style={styles.reelVideoPlaceholder}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <View
+          style={[styles.reelVideoPlaceholder, { backgroundColor: Colors.backgroundAccent }]}
         >
           <TouchableOpacity style={styles.playIconContainer}>
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight]}
-              style={styles.playButton}
+            <View
+              style={[styles.playButton, { backgroundColor: Colors.primary }]}
             >
               <Ionicons name="play" size={32} color={Colors.textPrimary} />
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
           
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.8)']}
+          <View
             style={styles.reelOverlay}
           >
             <Text style={[styles.reelTitleLarge, Typography.h4]}>{reel.title}</Text>
@@ -339,12 +325,11 @@ const ReelCard: React.FC<{
             )}
             <View style={styles.reelMetaRow}>
               <TouchableOpacity style={styles.instagramLinkButton}>
-                <LinearGradient
-                  colors={['#E1306C', '#F77737']}
-                  style={styles.instagramGradient}
+                <View
+                  style={[styles.instagramGradient, { backgroundColor: '#E1306C' }]}
                 >
                   <Ionicons name="logo-instagram" size={14} color={Colors.textPrimary} />
-                </LinearGradient>
+                </View>
                 <Text style={styles.instagramLink}>View on Instagram</Text>
               </TouchableOpacity>
               <View style={styles.reelStatsContainer}>
@@ -352,8 +337,8 @@ const ReelCard: React.FC<{
                 <Text style={styles.reelStats}>{reel.upvotes} likes</Text>
               </View>
             </View>
-          </LinearGradient>
-        </LinearGradient>
+          </View>
+        </View>
       </View>
 
       {/* Enhanced Actions */}
@@ -386,13 +371,12 @@ const ReelCard: React.FC<{
           style={styles.addButton}
           onPress={() => onAddToPlan(reel)}
         >
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryLight]}
-            style={styles.addButtonGradient}
+          <View
+            style={[styles.addButtonGradient, { backgroundColor: Colors.primary }]}
           >
             <Ionicons name="add-circle" size={20} color={Colors.textPrimary} />
             <Text style={[styles.actionText, { color: Colors.textPrimary }]}>Add to Plan</Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -404,23 +388,21 @@ const EmptyState: React.FC<{
   onRefresh: () => void;
 }> = ({ currentLocation, onRefresh }) => (
   <View style={styles.emptyState}>
-    <LinearGradient
-      colors={[Colors.primary + '30', Colors.secondary + '30']}
-      style={styles.emptyIconContainer}
+    <View
+      style={[styles.emptyIconContainer, { backgroundColor: Colors.primary + '30' }]}
     >
       <Ionicons name="location-outline" size={64} color={Colors.primary} />
-    </LinearGradient>
+    </View>
     <Text style={[styles.emptyTitle, Typography.h3]}>Discovering {currentLocation}</Text>
     <Text style={[styles.emptySubtitle, Typography.body2]}>
       We're curating fresh reels for your city. Try another location or check back soon!
     </Text>
     <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.retryButtonGradient}
+      <View
+        style={[styles.retryButtonGradient, { backgroundColor: Colors.primary }]}
       >
         <Text style={styles.retryText}>Refresh</Text>
-      </LinearGradient>
+      </View>
     </TouchableOpacity>
   </View>
 );
@@ -586,12 +568,11 @@ const DiscoverScreen: React.FC = () => {
         
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <LinearGradient
-              colors={[Colors.primary, Colors.secondary]}
-              style={styles.loadingIcon}
+            <View
+              style={[styles.loadingIcon, { backgroundColor: Colors.primary }]}
             >
               <Ionicons name="sparkles" size={32} color={Colors.textPrimary} />
-            </LinearGradient>
+            </View>
             <Text style={[styles.loadingText, Typography.body1]}>
               Discovering amazing places...
             </Text>
@@ -790,6 +771,7 @@ const styles = StyleSheet.create({
     padding: Spacing.m,
     borderBottomLeftRadius: BorderRadius.l,
     borderBottomRightRadius: BorderRadius.l,
+    backgroundColor: 'rgba(0,0,0,0.8)',
   },
   reelTitleLarge: {
     color: Colors.textPrimary,
