@@ -342,11 +342,19 @@ async def get_saved_reels(user_id: str):
 async def chatbot_from_profile(request: ChatRequest):
     """Chat from Profile → Day Plans context"""
     try:
-        response = await chat_from_profile_dayplans(
-            user_id=request.user_id,
-            message=request.message,
-            itinerary_id=request.itinerary_id
-        )
+        # Mock chatbot response - replace with actual chatbot integration
+        response = {
+            "message": f"Hi! I can help you with your day plans. You asked: '{request.message}'. Let me know which itinerary you'd like to discuss!",
+            "actions": [
+                {"type": "view_plans", "label": "View your plans"},
+                {"type": "create_plan", "label": "Create new plan"}
+            ],
+            "context": {
+                "itinerary_id": request.itinerary_id,
+                "context_type": "profile_dayplans",
+                "user_id": request.user_id
+            }
+        }
         return response
         
     except Exception as e:
@@ -359,11 +367,20 @@ async def chatbot_from_start_day(request: ChatRequest):
         if not request.itinerary_id:
             raise HTTPException(status_code=400, detail="Itinerary ID required for Start My Day context")
         
-        response = await chat_from_start_my_day(
-            user_id=request.user_id,
-            message=request.message,
-            itinerary_id=request.itinerary_id
-        )
+        # Mock chatbot response for active day execution
+        response = {
+            "message": f"I'm here to help with your active trip! You said: '{request.message}'. How can I assist you today?",
+            "actions": [
+                {"type": "nearby_suggestions", "label": "Find nearby alternatives"},
+                {"type": "check_done", "label": "Mark location as visited"},
+                {"type": "get_directions", "label": "Get directions"}
+            ],
+            "context": {
+                "itinerary_id": request.itinerary_id,
+                "context_type": "start_my_day",
+                "user_id": request.user_id
+            }
+        }
         return response
         
     except Exception as e:
@@ -373,10 +390,19 @@ async def chatbot_from_start_day(request: ChatRequest):
 async def chatbot_general(request: ChatRequest):
     """General travel assistance chat"""
     try:
-        response = await general_travel_chat(
-            user_id=request.user_id,
-            message=request.message
-        )
+        # Mock general travel chatbot response
+        response = {
+            "message": f"Hello! I'm Toria, your travel assistant. You asked: '{request.message}'. I can help you plan trips, find great places, and answer travel questions!",
+            "actions": [
+                {"type": "plan_trip", "label": "Plan a new trip"},
+                {"type": "find_places", "label": "Find places to visit"},
+                {"type": "travel_tips", "label": "Get travel tips"}
+            ],
+            "context": {
+                "context_type": "general",
+                "user_id": request.user_id
+            }
+        }
         return response
         
     except Exception as e:
