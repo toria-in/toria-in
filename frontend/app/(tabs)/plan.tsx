@@ -296,6 +296,25 @@ const PlanScreen: React.FC = () => {
   const [placesInput, setPlacesInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Prepopulate form with pending items on mount
+  useEffect(() => {
+    if (pendingItems.length > 0) {
+      const uniqueLocations = Array.from(new Set(pendingItems.map(item => item.location)));
+      const combinedPlaces = [...formData.places, ...uniqueLocations].filter((place, index, arr) => arr.indexOf(place) === index);
+      
+      setFormData(prev => ({
+        ...prev,
+        places: combinedPlaces
+      }));
+
+      Toast.show({
+        type: 'info',
+        text1: `${pendingItems.length} items from Discover added! 🎯`,
+        text2: 'Complete your trip details below',
+      });
+    }
+  }, [pendingItems]);
+
   // Mutations for API calls
   const planTripMutation = useMutation({
     mutationFn: planMyTrip,
