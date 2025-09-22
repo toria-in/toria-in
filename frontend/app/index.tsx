@@ -73,66 +73,7 @@ const ReelCard: React.FC<{
 }> = ({ reel, onUpvote, onSave, onAddToPlan, isUpvoting, isSaving }) => {
   const [webViewHeight, setWebViewHeight] = useState(400);
 
-  const handleWebViewMessage = (event: any) => {
-    try {
-      const { height } = JSON.parse(event.nativeEvent.data);
-      if (height) {
-        setWebViewHeight(Math.min(height, screenHeight * 0.6));
-      }
-    } catch (error) {
-      console.log('WebView message error:', error);
-    }
-  };
-
-  const injectedJavaScript = `
-    (function() {
-      function sendHeight() {
-        const height = document.documentElement.scrollHeight;
-        window.ReactNativeWebView.postMessage(JSON.stringify({ height }));
-      }
-      
-      setTimeout(sendHeight, 1000);
-      
-      // Auto-resize Instagram embeds
-      if (window.instgrm) {
-        window.instgrm.Embeds.process();
-      }
-      
-      // Listen for Instagram embed load
-      document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(sendHeight, 2000);
-      });
-      
-      true;
-    })();
-  `;
-
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body {
-            margin: 0;
-            padding: 16px;
-            background-color: #1a1a1a;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          }
-          .instagram-media {
-            background: white !important;
-            border-radius: 8px !important;
-            max-width: 100% !important;
-            margin: 0 auto !important;
-          }
-        </style>
-      </head>
-      <body>
-        ${reel.embed_code}
-        <script async src="//www.instagram.com/embed.js"></script>
-      </body>
-    </html>
-  `;
+  // Create a beautiful native reel display instead of WebView
 
   return (
     <View style={styles.reelCard}>
