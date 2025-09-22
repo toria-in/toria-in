@@ -341,8 +341,7 @@ const DiscoverScreen: React.FC = () => {
     );
   };
 
-  // LocationFilter moved outside component
-    const [webViewHeight, setWebViewHeight] = useState(400);
+  // Components moved outside to fix React Hooks violation
 
     const handleWebViewMessage = (event: any) => {
       try {
