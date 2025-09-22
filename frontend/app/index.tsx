@@ -507,14 +507,21 @@ const DiscoverScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LocationFilter />
+      <LocationFilter 
+        currentLocation={currentLocation}
+        selectedItinerary={selectedItinerary}
+        onClearItinerary={() => setSelectedItinerary(null)}
+      />
       
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Discovering amazing places...</Text>
         </View>
       ) : reels.length === 0 ? (
-        <EmptyState />
+        <EmptyState 
+          currentLocation={currentLocation}
+          onRefresh={refetch}
+        />
       ) : (
         <FlashList
           data={reels}
