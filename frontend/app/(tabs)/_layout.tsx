@@ -50,17 +50,17 @@ export default function TabsLayout() {
           title: 'Discover',
           headerTitle: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Image 
-                source={require('../../assets/images/toria-logo.jpeg')} 
-                style={{ 
-                  width: 32, 
-                  height: 32, 
-                  marginRight: 8, 
-                  borderRadius: 16,
-                  borderWidth: 2,
-                  borderColor: Colors.primary,
-                }}
-              />
+              <View style={{
+                width: 32,
+                height: 32,
+                marginRight: 8,
+                borderRadius: 16,
+                backgroundColor: Colors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>T</Text>
+              </View>
               <Text style={{ 
                 color: Colors.textPrimary, 
                 fontSize: 20, 
