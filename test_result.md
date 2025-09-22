@@ -122,6 +122,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ RE-VERIFICATION COMPLETE (2025-09-22): Conducted comprehensive re-testing of all backend API endpoints as requested. ALL 7 CATEGORIES PASSED 100%: Health Check (200 OK), User Management (create/retrieve users), Instagram Reels (full CRUD + upvote/save), AI Travel Planning (plan_my_trip + top_places with Gemini 2.5 Flash), Day Plans Management (full CRUD + status updates), Travel Buddy Chatbot (dayplans + startmyday), Saved Reels (retrieval working). Backend running perfectly on https://toria-discover-plan.preview.emergentagent.com/api with MongoDB persistence. Gemini 2.5 Flash integration confirmed working with Emergent LLM key. Backend logs show no errors. All endpoints returning proper responses with correct data structures. Backend is production-ready."
+      - working: true
+        agent: "testing"
+        comment: "✅ COMPREHENSIVE NEW TORIA BACKEND TESTING COMPLETE (2025-01-27): Conducted exhaustive testing of all 8 backend API categories with 19 individual tests - ALL PASSED 100%! Categories tested: Health Endpoints (Root + Detailed health checks), Enhanced Reel Discovery (location-filtered reels with upvote/save), AI Travel Planning (plan-my-trip + top-places with mock AI responses), Day Plans Management (user day plans CRUD), Travel Buddy Chatbot (all 3 contexts: profile-dayplans, start-my-day, general), Push Notifications (send notifications, location suggestions, feedback reminders), User Management (profiles + preferences), Analytics (event tracking). Backend running flawlessly on https://toria-discover-plan.preview.emergentagent.com/api with MongoDB connectivity confirmed. All new features operational including notification scheduler startup services. Fixed minor notification return value issues during testing. Backend is production-ready with 100% test success rate."
 
   - task: "Gemini 2.5 Flash Integration"
     implemented: true
