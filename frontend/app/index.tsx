@@ -298,26 +298,7 @@ const DiscoverScreen: React.FC = () => {
     );
   };
 
-  const LocationFilter = () => (
-    <View style={styles.filterContainer}>
-      <TouchableOpacity style={styles.filterPill}>
-        <Ionicons name="location" size={16} color="#ff6b35" />
-        <Text style={styles.filterText}>{currentLocation}</Text>
-        <Ionicons name="chevron-down" size={16} color="#ff6b35" />
-      </TouchableOpacity>
-      
-      {selectedItinerary && (
-        <TouchableOpacity 
-          style={[styles.filterPill, styles.itineraryPill]}
-          onPress={() => setSelectedItinerary(null)}
-        >
-          <Ionicons name="map" size={16} color="#4CAF50" />
-          <Text style={[styles.filterText, { color: '#4CAF50' }]}>My Plan</Text>
-          <Ionicons name="close" size={16} color="#4CAF50" />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  // LocationFilter moved outside component
     const [webViewHeight, setWebViewHeight] = useState(400);
 
     const handleWebViewMessage = (event: any) => {
