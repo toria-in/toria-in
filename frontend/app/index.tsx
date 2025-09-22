@@ -37,6 +37,49 @@ interface Reel {
   saves: number;
 }
 
+// LocationFilter component moved outside to fix React Hooks violation
+const LocationFilter = ({ currentLocation, selectedItinerary, onClearItinerary }: {
+  currentLocation: string;
+  selectedItinerary: string | null;
+  onClearItinerary: () => void;
+}) => (
+  <View style={styles.filterContainer}>
+    <TouchableOpacity style={styles.filterPill}>
+      <Ionicons name="location" size={16} color="#ff6b35" />
+      <Text style={styles.filterText}>{currentLocation}</Text>
+      <Ionicons name="chevron-down" size={16} color="#ff6b35" />
+    </TouchableOpacity>
+    
+    {selectedItinerary && (
+      <TouchableOpacity 
+        style={[styles.filterPill, styles.itineraryPill]}
+        onPress={onClearItinerary}
+      >
+        <Ionicons name="map" size={16} color="#4CAF50" />
+        <Text style={[styles.filterText, { color: '#4CAF50' }]}>My Plan</Text>
+        <Ionicons name="close" size={16} color="#4CAF50" />
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+// EmptyState component moved outside to fix React Hooks violation
+const EmptyState = ({ currentLocation, onRefresh }: {
+  currentLocation: string;
+  onRefresh: () => void;
+}) => (
+  <View style={styles.emptyState}>
+    <Ionicons name="location-outline" size={64} color="#8e8e93" />
+    <Text style={styles.emptyTitle}>Discovering {currentLocation}</Text>
+    <Text style={styles.emptySubtitle}>
+      We're curating fresh reels for your city. Try another location or check back soon!
+    </Text>
+    <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+      <Text style={styles.retryText}>Refresh</Text>
+    </TouchableOpacity>
+  </View>
+);
+
 // ReelCard component moved outside to fix React Hooks violation
 const ReelCard = ({ item: reel, onUpvote, onSave, onAddToPlan }: { 
   item: Reel; 
