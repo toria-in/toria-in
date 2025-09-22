@@ -433,6 +433,9 @@ async def get_saved_reels(user_id: str):
     reel_ids = [sr["reel_id"] for sr in saved_reels]
     
     reels = await db.reels.find({"id": {"$in": reel_ids}}).to_list(None)
+    # Remove MongoDB _id field to avoid serialization issues
+    for reel in reels:
+        reel.pop("_id", None)
     return reels
 
 # Root endpoint
