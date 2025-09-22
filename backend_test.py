@@ -52,7 +52,7 @@ class ToriaBackendTester:
         
         # Test root health check
         try:
-            async with self.session.get(f"{BACKEND_URL}/") as response:
+            async with self.session.get(f"{BACKEND_ROOT}/") as response:
                 if response.status == 200:
                     data = await response.json()
                     if data.get("status") == "healthy" and "features" in data:
