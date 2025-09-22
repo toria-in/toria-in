@@ -203,4 +203,32 @@ export const getSavedReels = async (userId: string): Promise<any[]> => {
   return response.data;
 };
 
+// Analytics APIs
+export const trackEvent = async (eventName: string, properties?: Record<string, any>) => {
+  try {
+    const response = await api.post('/analytics/track', {
+      event: eventName,
+      properties: properties || {},
+      timestamp: new Date().toISOString(),
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('Analytics tracking failed:', error);
+  }
+};
+
+// Notification APIs
+export const registerForNotifications = async (userId: string, pushToken: string) => {
+  const response = await api.post('/notifications/register', {
+    user_id: userId,
+    push_token: pushToken,
+  });
+  return response.data;
+};
+
+export const updateNotificationPreferences = async (userId: string, preferences: Record<string, boolean>) => {
+  const response = await api.put(`/notifications/preferences/${userId}`, preferences);
+  return response.data;
+};
+
 export default api;
