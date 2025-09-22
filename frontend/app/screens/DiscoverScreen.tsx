@@ -83,7 +83,7 @@ const DiscoverScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['reels', currentLocation, selectedItinerary],
     queryFn: () => fetchReels({ location: currentLocation }),
-    enabled: !!currentLocation, // Only run query when location is available
+    enabled: true, // Always enabled to avoid conditional hooks
   });
 
   // Upvote mutation
