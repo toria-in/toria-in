@@ -279,6 +279,7 @@ const DateTimeInput: React.FC<{
 
 const PlanScreen: React.FC = () => {
   const { user } = useAuth();
+  const { pendingItems, clearPendingItems } = usePlan();
   const [formData, setFormData] = useState<PlanFormData>({
     places: [],
     goingWith: '',
