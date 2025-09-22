@@ -299,7 +299,7 @@ const PlanScreen: React.FC = () => {
   // Prepopulate form with pending items on mount
   useEffect(() => {
     if (pendingItems.length > 0) {
-      const uniqueLocations = Array.from(new Set(pendingItems.map(item => item.location)));
+      const uniqueLocations = Array.from(new Set(pendingItems.map(item => item.location))) as string[];
       const combinedPlaces = [...formData.places, ...uniqueLocations].filter((place, index, arr) => arr.indexOf(place) === index);
       
       setFormData(prev => ({
