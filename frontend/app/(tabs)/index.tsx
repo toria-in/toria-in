@@ -19,7 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Modal from 'react-native-modal';
 import Toast from 'react-native-toast-message';
 
-import { fetchReels, upvoteReel, saveReel, trackEvent } from '../../services/api';
+import { fetchReels, upvoteReel, saveReel, trackEvent } from '../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/Colors';
 
