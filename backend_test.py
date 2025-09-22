@@ -14,6 +14,7 @@ from typing import Dict, List, Any
 # Backend URL from environment
 BACKEND_URL = "https://toria-discover-plan.preview.emergentagent.com/api"
 BASE_URL = "https://toria-discover-plan.preview.emergentagent.com"
+BACKEND_ROOT = "http://localhost:8001"
 
 class ToriaBackendTester:
     def __init__(self):
