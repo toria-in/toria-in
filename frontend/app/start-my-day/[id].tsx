@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import Modal from 'react-native-modal';
 
-import { getUserDayPlans, chatbotFromStartMyDay } from '../../services/api';
+import { getUserDayPlans, chatbotFromStartMyDay } from '../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
