@@ -460,18 +460,7 @@ const DiscoverScreen: React.FC = () => {
     );
   };
 
-  const EmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="location-outline" size={64} color="#8e8e93" />
-      <Text style={styles.emptyTitle}>Discovering {currentLocation}</Text>
-      <Text style={styles.emptySubtitle}>
-        We're curating fresh reels for your city. Try another location or check back soon!
-      </Text>
-      <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
-        <Text style={styles.retryText}>Refresh</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  // EmptyState moved outside component
 
   return (
     <SafeAreaView style={styles.container}>
