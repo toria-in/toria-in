@@ -71,7 +71,15 @@ export default function App() {
           component={DiscoverScreen}
           options={{
             title: 'Discover',
-            headerTitle: 'Toria • Discover',
+            headerTitle: () => (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Image 
+                  source={require('../assets/images/toria-logo.jpeg')} 
+                  style={{ width: 32, height: 32, marginRight: 8, borderRadius: 16 }}
+                />
+                <Text style={{ color: '#ffffff', fontSize: 18, fontWeight: 'bold' }}>Toria</Text>
+              </View>
+            ),
           }}
         />
         <Tab.Screen 
