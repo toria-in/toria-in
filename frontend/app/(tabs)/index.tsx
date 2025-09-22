@@ -411,6 +411,7 @@ const EmptyState: React.FC<{
 const DiscoverScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { addPendingItem } = usePlan();
   const [currentLocation, setCurrentLocation] = useState<string>('Delhi');
   const [selectedItinerary, setSelectedItinerary] = useState<string | null>(null);
   const [isCityModalVisible, setIsCityModalVisible] = useState(false);
