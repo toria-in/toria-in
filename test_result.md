@@ -204,11 +204,11 @@ frontend:
 
   - task: "Plan Screen (AI Travel Planning)"
     implemented: true
-    working: false
-    file: "/app/frontend/app/screens/PlanScreen.tsx"
+    working: "NA"
+    file: "/app/frontend/app/plan.tsx"
     stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: false
         agent: "main"
@@ -216,6 +216,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ Cannot test properly due to NavigationContainer error. Screen implementation appears comprehensive with mandatory inputs (Places, Going With, Focus), optional filters (Duration, Diet, Budget, Vibe), AI integration buttons (Get Toria Recommendations, Build Your Day), form validation, and mobile-optimized keyboard handling."
+      - working: "NA"
+        agent: "testing"
+        comment: "Cannot test due to React Hooks violation in Discover screen preventing app from rendering properly. Plan screen implementation appears complete with comprehensive form inputs, AI integration, and mobile-optimized design. Needs testing once Discover screen hooks issue is resolved."
 
   - task: "Profile Screen"
     implemented: true
