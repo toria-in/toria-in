@@ -155,7 +155,7 @@ class NotificationService:
             "actions": ["Rate experience", "Add photos", "Write review"]
         }
         
-        await self.send_notification(user_id, title, body, data)
+        return await self.send_notification(user_id, title, body, data)
     
     async def get_user_notifications(self, user_id: str, limit: int = 20) -> List[Dict]:
         """Get user's notification history"""
