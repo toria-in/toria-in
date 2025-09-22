@@ -104,13 +104,13 @@ export default function TabsLayout() {
           title: 'Plan',
           headerTitle: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <LinearGradient
-                colors={[Colors.secondary, Colors.accent]}
+              <View
                 style={{
                   width: 6,
                   height: 24,
                   borderRadius: 3,
                   marginRight: 8,
+                  backgroundColor: Colors.secondary,
                 }}
               />
               <Text style={{ 
