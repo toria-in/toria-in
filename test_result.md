@@ -187,8 +187,8 @@ frontend:
   - task: "Discover Screen (Instagram Reels)"
     implemented: true
     working: false
-    file: "/app/frontend/app/screens/DiscoverScreen.tsx"
-    stuck_count: 1
+    file: "/app/frontend/app/index.tsx"
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -198,6 +198,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ Cannot test properly due to NavigationContainer error preventing app from rendering. Screen implementation appears complete with Instagram WebView embeds, location filtering (Delhi), reel actions (upvote, save, add to plan), FlashList for performance, and proper mobile styling. Backend API integration ready."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL REACT HOOKS VIOLATION: Screen implementation is comprehensive with all features (Instagram WebView embeds, location filtering, reel actions, FlashList), and API integration is working (successful GET /reels?location=Delhi calls), but app crashes due to React Hooks violation caused by nested components with hooks inside DiscoverScreen. Attempted to fix by moving ReelCard, LocationFilter, EmptyState components outside but code corruption persists."
 
   - task: "Plan Screen (AI Travel Planning)"
     implemented: true
