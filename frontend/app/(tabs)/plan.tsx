@@ -432,6 +432,9 @@ const PlanScreen: React.FC = () => {
     };
 
     planTripMutation.mutate(planData);
+    
+    // Clear pending items after successful planning
+    clearPendingItems();
   };
 
   // Handle Build Your Day
