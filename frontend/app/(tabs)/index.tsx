@@ -530,20 +530,42 @@ const DiscoverScreen: React.FC = () => {
   };
 
   const handleAddToNewPlan = () => {
+    const reel = addToPlanModal.reel;
+    if (reel) {
+      // Add to pending items
+      addPendingItem({
+        id: reel.id,
+        title: reel.title,
+        location: reel.location,
+        type: reel.type,
+        raw: reel
+      });
+    }
     setAddToPlanModal({ visible: false, reel: null });
     Toast.show({
       type: 'success',
-      text1: 'Added to New Plan! ✨',
-      text2: 'Complete it in the Plan tab',
+      text1: 'Added to Plan! ✨',
+      text2: 'Go to Plan tab to complete your itinerary',
     });
   };
 
   const handleAddToExistingPlan = () => {
+    const reel = addToPlanModal.reel;
+    if (reel) {
+      // Add to pending items for existing plans too
+      addPendingItem({
+        id: reel.id,
+        title: reel.title,
+        location: reel.location,
+        type: reel.type,
+        raw: reel
+      });
+    }
     setAddToPlanModal({ visible: false, reel: null });
     Toast.show({
       type: 'success',
-      text1: 'Added to Existing Plan! 📅',
-      text2: 'Check your day plans',
+      text1: 'Added to Plan! 📅',
+      text2: 'Go to Plan tab to add it to your itinerary',
     });
   };
 
