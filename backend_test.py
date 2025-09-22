@@ -1,463 +1,574 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend API Testing for Toria Travel App
-Tests all backend endpoints including AI integration with Gemini 2.5 Flash
+Comprehensive Backend Testing for Toria API
+Tests all endpoints including health, reels, AI planning, chatbot, notifications, and analytics
 """
 
-import requests
+import asyncio
+import aiohttp
 import json
-import uuid
+import sys
 from datetime import datetime
-import time
+from typing import Dict, List, Any
 
-# Backend URL from frontend environment
-BASE_URL = "https://toria-discover-plan.preview.emergentagent.com/api"
+# Backend URL from environment
+BACKEND_URL = "https://toria-discover-plan.preview.emergentagent.com/api"
+BASE_URL = "https://toria-discover-plan.preview.emergentagent.com"
 
 class ToriaBackendTester:
     def __init__(self):
-        self.base_url = BASE_URL
-        self.test_user_id = None
-        self.test_reel_id = None
-        self.test_plan_id = None
-        self.session = requests.Session()
-        self.session.headers.update({
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        })
+        self.session = None
+        self.test_results = []
+        self.test_user_id = "test-user-12345"
         
-    def log_test(self, test_name, success, details=""):
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status} {test_name}")
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            await self.session.close()
+    
+    def log_test(self, category: str, test_name: str, status: str, details: str = ""):
+        """Log test results"""
+        result = {
+            "category": category,
+            "test": test_name,
+            "status": status,
+            "details": details,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.test_results.append(result)
+        
+        status_emoji = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
+        print(f"{status_emoji} [{category}] {test_name}: {status}")
         if details:
             print(f"   Details: {details}")
-        print()
+    
+    async def test_health_endpoints(self):
+        """Test health check endpoints"""
+        print("\n🏥 Testing Health Endpoints...")
         
-    def test_health_check(self):
-        """Test root API endpoint"""
+        # Test root health check
         try:
-            response = self.session.get(f"{self.base_url}/")
-            success = response.status_code == 200
-            
-            if success:
-                data = response.json()
-                expected_fields = ["message", "status", "features"]
-                has_fields = all(field in data for field in expected_fields)
-                success = has_fields and data["status"] == "active"
-                details = f"Status: {response.status_code}, Response: {data}"
-            else:
-                details = f"Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Health Check API", success, details)
-            return success
-            
-        except Exception as e:
-            self.log_test("Health Check API", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_user_management(self):
-        """Test user creation and retrieval"""
-        try:
-            # Test user creation
-            user_data = {
-                "display_name": "Arjun Sharma",
-                "email": "arjun.sharma@example.com",
-                "preferences": {"travel_style": "adventure", "budget": "moderate"}
-            }
-            
-            response = self.session.post(f"{self.base_url}/users", json=user_data)
-            create_success = response.status_code == 200
-            
-            if create_success:
-                user = response.json()
-                self.test_user_id = user["id"]
-                details = f"Created user: {user['display_name']} with ID: {user['id']}"
-            else:
-                details = f"Create failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("User Creation", create_success, details)
-            
-            if not create_success:
-                return False
-                
-            # Test user retrieval
-            response = self.session.get(f"{self.base_url}/users/{self.test_user_id}")
-            retrieve_success = response.status_code == 200
-            
-            if retrieve_success:
-                user = response.json()
-                details = f"Retrieved user: {user['display_name']}, Email: {user.get('email', 'N/A')}"
-            else:
-                details = f"Retrieve failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("User Retrieval", retrieve_success, details)
-            return create_success and retrieve_success
-            
-        except Exception as e:
-            self.log_test("User Management", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_instagram_reels(self):
-        """Test Instagram reels endpoints"""
-        try:
-            # Test getting reels
-            response = self.session.get(f"{self.base_url}/reels")
-            get_success = response.status_code == 200
-            
-            if get_success:
-                reels = response.json()
-                details = f"Retrieved {len(reels)} reels"
-                if reels:
-                    self.test_reel_id = reels[0]["id"]
-                    details += f", First reel: {reels[0]['title']} in {reels[0]['location']}"
-            else:
-                details = f"Get reels failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Get Instagram Reels", get_success, details)
-            
-            # Test creating a new reel
-            reel_data = {
-                "instagram_url": "https://www.instagram.com/reel/test123/",
-                "embed_code": "<blockquote>Test embed code</blockquote>",
-                "title": "Amazing Rajasthani Thali",
-                "description": "Traditional Rajasthani food experience",
-                "location": "Jaipur",
-                "type": "Food",
-                "creator_handle": "@foodie_rajasthan",
-                "tags": ["rajasthani", "thali", "traditional", "jaipur"],
-                "metadata": {"price": "₹₹", "hygiene": "Excellent", "timing": "Lunch"}
-            }
-            
-            response = self.session.post(f"{self.base_url}/reels", json=reel_data)
-            create_success = response.status_code == 200
-            
-            if create_success:
-                reel = response.json()
-                details = f"Created reel: {reel['title']} with ID: {reel['id']}"
-                if not self.test_reel_id:  # Use this if no existing reels
-                    self.test_reel_id = reel["id"]
-            else:
-                details = f"Create reel failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Create Instagram Reel", create_success, details)
-            
-            # Test upvoting a reel
-            if self.test_reel_id:
-                response = self.session.post(f"{self.base_url}/reels/{self.test_reel_id}/upvote")
-                upvote_success = response.status_code == 200
-                
-                if upvote_success:
-                    details = f"Successfully upvoted reel {self.test_reel_id}"
+            async with self.session.get(f"{BASE_URL}/") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("status") == "healthy" and "features" in data:
+                        self.log_test("Health", "Root Health Check", "PASS", 
+                                    f"Status: {data['status']}, Features: {len(data['features'])}")
+                    else:
+                        self.log_test("Health", "Root Health Check", "FAIL", 
+                                    f"Invalid response structure: {data}")
                 else:
-                    details = f"Upvote failed - Status: {response.status_code}, Error: {response.text}"
-                    
-                self.log_test("Upvote Reel", upvote_success, details)
-            else:
-                self.log_test("Upvote Reel", False, "No test reel ID available")
-                upvote_success = False
-            
-            # Test saving a reel
-            if self.test_reel_id and self.test_user_id:
-                response = self.session.post(f"{self.base_url}/reels/{self.test_reel_id}/save", 
-                                           params={"user_id": self.test_user_id})
-                save_success = response.status_code == 200
-                
-                if save_success:
-                    details = f"Successfully saved reel {self.test_reel_id} for user {self.test_user_id}"
-                else:
-                    details = f"Save reel failed - Status: {response.status_code}, Error: {response.text}"
-                    
-                self.log_test("Save Reel", save_success, details)
-            else:
-                self.log_test("Save Reel", False, "Missing test reel ID or user ID")
-                save_success = False
-            
-            return get_success and create_success and upvote_success and save_success
-            
+                    self.log_test("Health", "Root Health Check", "FAIL", 
+                                f"HTTP {response.status}")
         except Exception as e:
-            self.log_test("Instagram Reels", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_ai_travel_planning(self):
-        """Test AI travel planning endpoints with Gemini 2.5 Flash"""
+            self.log_test("Health", "Root Health Check", "FAIL", str(e))
+        
+        # Test detailed health check
         try:
-            # Test plan_my_trip endpoint
+            async with self.session.get(f"{BACKEND_URL}/health") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("status") == "healthy" and "services" in data:
+                        self.log_test("Health", "Detailed Health Check", "PASS", 
+                                    f"DB: {data.get('database', 'unknown')}, Services: {len(data.get('services', {}))}")
+                    else:
+                        self.log_test("Health", "Detailed Health Check", "FAIL", 
+                                    f"Invalid response: {data}")
+                else:
+                    self.log_test("Health", "Detailed Health Check", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Health", "Detailed Health Check", "FAIL", str(e))
+    
+    async def test_reel_discovery(self):
+        """Test Instagram reel discovery endpoints"""
+        print("\n📱 Testing Reel Discovery...")
+        
+        # Test get reels with location filter
+        try:
+            async with self.session.get(f"{BACKEND_URL}/reels?location=Delhi&limit=5") as response:
+                if response.status == 200:
+                    reels = await response.json()
+                    if isinstance(reels, list) and len(reels) > 0:
+                        reel = reels[0]
+                        required_fields = ["id", "instagram_url", "title", "location", "type", "upvotes", "saves"]
+                        if all(field in reel for field in required_fields):
+                            self.log_test("Reels", "Get Reels with Location Filter", "PASS", 
+                                        f"Retrieved {len(reels)} reels for Delhi")
+                        else:
+                            missing = [f for f in required_fields if f not in reel]
+                            self.log_test("Reels", "Get Reels with Location Filter", "FAIL", 
+                                        f"Missing fields: {missing}")
+                    else:
+                        self.log_test("Reels", "Get Reels with Location Filter", "FAIL", 
+                                    "No reels returned or invalid format")
+                else:
+                    self.log_test("Reels", "Get Reels with Location Filter", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Reels", "Get Reels with Location Filter", "FAIL", str(e))
+        
+        # Test upvote reel
+        try:
+            async with self.session.post(f"{BACKEND_URL}/reels/reel_1/upvote") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("success") and data.get("reel_id") == "reel_1":
+                        self.log_test("Reels", "Upvote Reel", "PASS", "Reel upvoted successfully")
+                    else:
+                        self.log_test("Reels", "Upvote Reel", "FAIL", f"Invalid response: {data}")
+                else:
+                    self.log_test("Reels", "Upvote Reel", "FAIL", f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Reels", "Upvote Reel", "FAIL", str(e))
+        
+        # Test save reel
+        try:
+            payload = {"user_id": self.test_user_id}
+            async with self.session.post(f"{BACKEND_URL}/reels/reel_1/save", 
+                                       params=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("success"):
+                        self.log_test("Reels", "Save Reel", "PASS", "Reel saved successfully")
+                    else:
+                        self.log_test("Reels", "Save Reel", "FAIL", f"Save failed: {data}")
+                else:
+                    self.log_test("Reels", "Save Reel", "FAIL", f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Reels", "Save Reel", "FAIL", str(e))
+    
+    async def test_ai_travel_planning(self):
+        """Test AI-powered travel planning endpoints"""
+        print("\n🤖 Testing AI Travel Planning...")
+        
+        # Test plan-my-trip endpoint
+        try:
             trip_request = {
-                "places": ["Goa", "Mumbai"],
-                "going_with": "friends",
-                "focus": "both",
-                "duration": "3 days",
-                "date_time": "Weekend",
-                "diet": "vegetarian",
-                "budget": "moderate",
-                "vibe": ["beach", "nightlife", "food"]
-            }
-            
-            print("Testing AI Travel Planning (this may take a few seconds)...")
-            response = self.session.post(f"{self.base_url}/plan_my_trip", json=trip_request)
-            plan_success = response.status_code == 200
-            
-            if plan_success:
-                plan_data = response.json()
-                has_structure = "toria_recommended" in plan_data and "build_your_day" in plan_data
-                details = f"AI generated travel plan with structure: {has_structure}"
-                if has_structure:
-                    toria_rec = plan_data["toria_recommended"]
-                    build_day = plan_data["build_your_day"]
-                    details += f", Toria recommendations: {len(toria_rec.get('suggestions', []))}, Build your day options available: {bool(build_day.get('guidance'))}"
-                plan_success = has_structure
-            else:
-                details = f"Plan trip failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("AI Travel Planning (plan_my_trip)", plan_success, details)
-            
-            # Test top_places endpoint
-            places_request = {
                 "places": ["Delhi", "Agra"],
-                "going_with": "family",
-                "focus": "attractions",
-                "filters": {"budget": "moderate", "time": "weekend"}
+                "going_with": "friends",
+                "focus": "food",
+                "duration": 2,
+                "duration_unit": "days",
+                "date": "2024-12-25",
+                "time": "09:00",
+                "preferences": {"budget": "medium"},
+                "user_id": self.test_user_id
             }
             
-            response = self.session.post(f"{self.base_url}/top_places", json=places_request)
-            places_success = response.status_code == 200
-            
-            if places_success:
-                places_data = response.json()
-                has_structure = "food_places" in places_data and "attraction_places" in places_data
-                details = f"AI generated top places with structure: {has_structure}"
-                if has_structure:
-                    food_count = len(places_data.get("food_places", []))
-                    attraction_count = len(places_data.get("attraction_places", []))
-                    details += f", Food places: {food_count}, Attraction places: {attraction_count}"
-                places_success = has_structure
-            else:
-                details = f"Top places failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("AI Travel Planning (top_places)", places_success, details)
-            
-            return plan_success and places_success
-            
+            async with self.session.post(f"{BACKEND_URL}/plan-my-trip", 
+                                       json=trip_request) as response:
+                if response.status == 200:
+                    plan = await response.json()
+                    required_fields = ["itinerary_id", "title", "city", "stops", "ai_recommendations"]
+                    if all(field in plan for field in required_fields):
+                        stops_count = len(plan.get("stops", []))
+                        self.log_test("AI Planning", "Plan My Trip", "PASS", 
+                                    f"Generated itinerary with {stops_count} stops")
+                    else:
+                        missing = [f for f in required_fields if f not in plan]
+                        self.log_test("AI Planning", "Plan My Trip", "FAIL", 
+                                    f"Missing fields: {missing}")
+                else:
+                    self.log_test("AI Planning", "Plan My Trip", "FAIL", 
+                                f"HTTP {response.status}")
         except Exception as e:
-            self.log_test("AI Travel Planning", False, f"Exception: {str(e)}")
-            return False
+            self.log_test("AI Planning", "Plan My Trip", "FAIL", str(e))
+        
+        # Test top-places endpoint
+        try:
+            places_request = {
+                "places": ["Mumbai"],
+                "focus": "both"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/top-places", 
+                                       json=places_request) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "places" in data and isinstance(data["places"], list):
+                        places_count = len(data["places"])
+                        self.log_test("AI Planning", "Top Places", "PASS", 
+                                    f"Retrieved {places_count} top places for Mumbai")
+                    else:
+                        self.log_test("AI Planning", "Top Places", "FAIL", 
+                                    f"Invalid response format: {data}")
+                else:
+                    self.log_test("AI Planning", "Top Places", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("AI Planning", "Top Places", "FAIL", str(e))
     
-    def test_day_plans_management(self):
+    async def test_day_plans_management(self):
         """Test day plans CRUD operations"""
+        print("\n📅 Testing Day Plans Management...")
+        
+        # Test get user day plans
         try:
-            if not self.test_user_id:
-                self.log_test("Day Plans Management", False, "No test user ID available")
-                return False
-                
-            # Test creating a day plan
-            plan_data = {
+            async with self.session.get(f"{BACKEND_URL}/day-plans/{self.test_user_id}") as response:
+                if response.status == 200:
+                    plans = await response.json()
+                    if isinstance(plans, list):
+                        self.log_test("Day Plans", "Get User Day Plans", "PASS", 
+                                    f"Retrieved {len(plans)} day plans")
+                    else:
+                        self.log_test("Day Plans", "Get User Day Plans", "FAIL", 
+                                    f"Invalid response format: {type(plans)}")
+                else:
+                    self.log_test("Day Plans", "Get User Day Plans", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Day Plans", "Get User Day Plans", "FAIL", str(e))
+        
+        # Test get saved reels
+        try:
+            async with self.session.get(f"{BACKEND_URL}/saved-reels/{self.test_user_id}") as response:
+                if response.status == 200:
+                    saved_reels = await response.json()
+                    if isinstance(saved_reels, list):
+                        self.log_test("Day Plans", "Get Saved Reels", "PASS", 
+                                    f"Retrieved {len(saved_reels)} saved reels")
+                    else:
+                        self.log_test("Day Plans", "Get Saved Reels", "FAIL", 
+                                    f"Invalid response format: {type(saved_reels)}")
+                else:
+                    self.log_test("Day Plans", "Get Saved Reels", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Day Plans", "Get Saved Reels", "FAIL", str(e))
+    
+    async def test_travel_buddy_chatbot(self):
+        """Test travel buddy chatbot endpoints"""
+        print("\n🤖 Testing Travel Buddy Chatbot...")
+        
+        # Test profile-dayplans chatbot
+        try:
+            chat_request = {
+                "message": "Help me plan a trip to Goa",
                 "user_id": self.test_user_id,
-                "title": "Exploring Historic Delhi",
-                "city": "Delhi",
-                "going_with": "family",
-                "focus": "attractions",
-                "duration": "Full day",
-                "status": "upcoming",
-                "stops": [
-                    {"name": "Red Fort", "type": "Historical", "time": "10:00 AM", "duration": "2 hours"},
-                    {"name": "Chandni Chowk", "type": "Market", "time": "1:00 PM", "duration": "2 hours"},
-                    {"name": "India Gate", "type": "Monument", "time": "5:00 PM", "duration": "1 hour"}
-                ],
-                "generated_by_ai": False
+                "context_type": "profile_dayplans"
             }
             
-            response = self.session.post(f"{self.base_url}/day-plans", json=plan_data)
-            create_success = response.status_code == 200
-            
-            if create_success:
-                plan = response.json()
-                self.test_plan_id = plan["id"]
-                details = f"Created day plan: {plan['title']} with {len(plan['stops'])} stops"
-            else:
-                details = f"Create plan failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Create Day Plan", create_success, details)
-            
-            # Test getting user's day plans
-            response = self.session.get(f"{self.base_url}/day-plans/{self.test_user_id}")
-            get_success = response.status_code == 200
-            
-            if get_success:
-                plans = response.json()
-                details = f"Retrieved {len(plans)} day plans for user"
-            else:
-                details = f"Get plans failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Get User Day Plans", get_success, details)
-            
-            # Test getting plans by status
-            response = self.session.get(f"{self.base_url}/day-plans/{self.test_user_id}/upcoming")
-            status_success = response.status_code == 200
-            
-            if status_success:
-                plans = response.json()
-                details = f"Retrieved {len(plans)} upcoming plans"
-            else:
-                details = f"Get plans by status failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Get Day Plans by Status", status_success, details)
-            
-            # Test updating plan status
-            if self.test_plan_id:
-                response = self.session.put(f"{self.base_url}/day-plans/{self.test_plan_id}/status", 
-                                          params={"status": "current"})
-                update_success = response.status_code == 200
-                
-                if update_success:
-                    details = f"Successfully updated plan status to 'current'"
+            async with self.session.post(f"{BACKEND_URL}/chatbot/profile-dayplans", 
+                                       json=chat_request) as response:
+                if response.status == 200:
+                    chat_response = await response.json()
+                    required_fields = ["message", "actions", "context"]
+                    if all(field in chat_response for field in required_fields):
+                        actions_count = len(chat_response.get("actions", []))
+                        self.log_test("Chatbot", "Profile Day Plans Context", "PASS", 
+                                    f"Response with {actions_count} suggested actions")
+                    else:
+                        missing = [f for f in required_fields if f not in chat_response]
+                        self.log_test("Chatbot", "Profile Day Plans Context", "FAIL", 
+                                    f"Missing fields: {missing}")
                 else:
-                    details = f"Update status failed - Status: {response.status_code}, Error: {response.text}"
-                    
-                self.log_test("Update Day Plan Status", update_success, details)
-            else:
-                self.log_test("Update Day Plan Status", False, "No test plan ID available")
-                update_success = False
-            
-            return create_success and get_success and status_success and update_success
-            
+                    self.log_test("Chatbot", "Profile Day Plans Context", "FAIL", 
+                                f"HTTP {response.status}")
         except Exception as e:
-            self.log_test("Day Plans Management", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_travel_buddy_chatbot(self):
-        """Test travel buddy chatbot endpoints"""
+            self.log_test("Chatbot", "Profile Day Plans Context", "FAIL", str(e))
+        
+        # Test start-my-day chatbot
         try:
-            if not self.test_user_id:
-                self.log_test("Travel Buddy Chatbot", False, "No test user ID available")
-                return False
-                
-            # Test chatbot from day plans
-            response = self.session.post(f"{self.base_url}/chatbot_from_dayplans", 
-                                       params={"user_id": self.test_user_id})
-            dayplans_success = response.status_code == 200
+            chat_request = {
+                "message": "I'm at the first location, what's next?",
+                "user_id": self.test_user_id,
+                "context_type": "start_my_day",
+                "itinerary_id": "test-itinerary-123"
+            }
             
-            if dayplans_success:
-                chat_data = response.json()
-                has_structure = "message" in chat_data and "context" in chat_data
-                details = f"Chatbot responded with structure: {has_structure}"
-                if has_structure and chat_data.get("context", {}).get("needs_selection"):
-                    details += f", Available itineraries: {len(chat_data.get('itineraries', []))}"
-            else:
-                details = f"Dayplans chatbot failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Travel Buddy Chatbot (Day Plans)", dayplans_success, details)
-            
-            # Test chatbot with specific itinerary if we have one
-            if dayplans_success and self.test_plan_id:
-                response = self.session.post(f"{self.base_url}/chatbot_from_dayplans", 
-                                           params={
-                                               "user_id": self.test_user_id,
-                                               "itinerary_id": self.test_plan_id,
-                                               "message": "Tell me about the best time to visit Red Fort"
-                                           })
-                specific_success = response.status_code == 200
-                
-                if specific_success:
-                    chat_data = response.json()
-                    details = f"Chatbot provided specific itinerary guidance"
+            async with self.session.post(f"{BACKEND_URL}/chatbot/start-my-day", 
+                                       json=chat_request) as response:
+                if response.status == 200:
+                    chat_response = await response.json()
+                    required_fields = ["message", "actions", "context"]
+                    if all(field in chat_response for field in required_fields):
+                        self.log_test("Chatbot", "Start My Day Context", "PASS", 
+                                    "Active day execution chatbot working")
+                    else:
+                        missing = [f for f in required_fields if f not in chat_response]
+                        self.log_test("Chatbot", "Start My Day Context", "FAIL", 
+                                    f"Missing fields: {missing}")
                 else:
-                    details = f"Specific chatbot failed - Status: {response.status_code}, Error: {response.text}"
-                    
-                self.log_test("Travel Buddy Chatbot (Specific Itinerary)", specific_success, details)
-            else:
-                specific_success = True  # Skip if no plan ID
-            
-            # Test start my day chatbot
-            response = self.session.post(f"{self.base_url}/chatbot_from_startmyday", 
-                                       params={
-                                           "user_id": self.test_user_id,
-                                           "message": "How can you help me today?"
-                                       })
-            startday_success = response.status_code == 200
-            
-            if startday_success:
-                chat_data = response.json()
-                has_structure = "message" in chat_data and "context" in chat_data
-                details = f"Start my day chatbot responded with structure: {has_structure}"
-                if not has_structure or chat_data.get("context", {}).get("error") == "no_active_plan":
-                    details += " (No active plan found - expected behavior)"
-            else:
-                details = f"Start my day chatbot failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Travel Buddy Chatbot (Start My Day)", startday_success, details)
-            
-            return dayplans_success and specific_success and startday_success
-            
+                    self.log_test("Chatbot", "Start My Day Context", "FAIL", 
+                                f"HTTP {response.status}")
         except Exception as e:
-            self.log_test("Travel Buddy Chatbot", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_saved_reels(self):
-        """Test saved reels functionality"""
+            self.log_test("Chatbot", "Start My Day Context", "FAIL", str(e))
+        
+        # Test general travel chatbot
         try:
-            if not self.test_user_id:
-                self.log_test("Saved Reels", False, "No test user ID available")
-                return False
-                
-            # Test getting saved reels
-            response = self.session.get(f"{self.base_url}/saved-reels/{self.test_user_id}")
-            success = response.status_code == 200
+            chat_request = {
+                "message": "What are the best places to visit in Kerala?",
+                "user_id": self.test_user_id,
+                "context_type": "general"
+            }
             
-            if success:
-                saved_reels = response.json()
-                details = f"Retrieved {len(saved_reels)} saved reels for user"
-                if saved_reels:
-                    details += f", First saved reel: {saved_reels[0].get('title', 'N/A')}"
-            else:
-                details = f"Get saved reels failed - Status: {response.status_code}, Error: {response.text}"
-                
-            self.log_test("Get Saved Reels", success, details)
-            return success
-            
+            async with self.session.post(f"{BACKEND_URL}/chatbot/general", 
+                                       json=chat_request) as response:
+                if response.status == 200:
+                    chat_response = await response.json()
+                    required_fields = ["message", "actions", "context"]
+                    if all(field in chat_response for field in required_fields):
+                        self.log_test("Chatbot", "General Travel Context", "PASS", 
+                                    "General travel assistance working")
+                    else:
+                        missing = [f for f in required_fields if f not in chat_response]
+                        self.log_test("Chatbot", "General Travel Context", "FAIL", 
+                                    f"Missing fields: {missing}")
+                else:
+                    self.log_test("Chatbot", "General Travel Context", "FAIL", 
+                                f"HTTP {response.status}")
         except Exception as e:
-            self.log_test("Saved Reels", False, f"Exception: {str(e)}")
-            return False
+            self.log_test("Chatbot", "General Travel Context", "FAIL", str(e))
     
-    def run_all_tests(self):
-        """Run all backend tests"""
-        print("=" * 60)
-        print("TORIA BACKEND API COMPREHENSIVE TESTING")
-        print("=" * 60)
-        print(f"Testing against: {self.base_url}")
-        print()
+    async def test_push_notifications(self):
+        """Test push notification system"""
+        print("\n📱 Testing Push Notifications...")
         
-        results = {}
+        # Test send notification
+        try:
+            notification_request = {
+                "user_id": self.test_user_id,
+                "title": "Test Notification",
+                "body": "This is a test notification from Toria API",
+                "data": {"type": "test", "priority": "normal"}
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/notifications/send", 
+                                       json=notification_request) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("success"):
+                        self.log_test("Notifications", "Send Notification", "PASS", 
+                                    "Notification sent successfully")
+                    else:
+                        self.log_test("Notifications", "Send Notification", "FAIL", 
+                                    f"Send failed: {result}")
+                else:
+                    self.log_test("Notifications", "Send Notification", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Notifications", "Send Notification", "FAIL", str(e))
         
-        # Test in logical order
-        results["health_check"] = self.test_health_check()
-        results["user_management"] = self.test_user_management()
-        results["instagram_reels"] = self.test_instagram_reels()
-        results["ai_travel_planning"] = self.test_ai_travel_planning()
-        results["day_plans_management"] = self.test_day_plans_management()
-        results["travel_buddy_chatbot"] = self.test_travel_buddy_chatbot()
-        results["saved_reels"] = self.test_saved_reels()
+        # Test get user notifications
+        try:
+            async with self.session.get(f"{BACKEND_URL}/notifications/{self.test_user_id}") as response:
+                if response.status == 200:
+                    notifications = await response.json()
+                    if isinstance(notifications, list):
+                        self.log_test("Notifications", "Get User Notifications", "PASS", 
+                                    f"Retrieved {len(notifications)} notifications")
+                    else:
+                        self.log_test("Notifications", "Get User Notifications", "FAIL", 
+                                    f"Invalid response format: {type(notifications)}")
+                else:
+                    self.log_test("Notifications", "Get User Notifications", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Notifications", "Get User Notifications", "FAIL", str(e))
         
-        # Summary
-        print("=" * 60)
-        print("TEST SUMMARY")
-        print("=" * 60)
+        # Test location suggestions notification
+        try:
+            suggestion_request = {
+                "user_id": self.test_user_id,
+                "location": "Connaught Place, Delhi",
+                "suggestions": [
+                    {"name": "India Gate", "type": "Place", "distance": "2km"},
+                    {"name": "Karim's", "type": "Food", "distance": "1km"}
+                ]
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/notifications/location-suggestions", 
+                                       json=suggestion_request) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("success"):
+                        self.log_test("Notifications", "Location Suggestions", "PASS", 
+                                    "Location suggestions sent")
+                    else:
+                        self.log_test("Notifications", "Location Suggestions", "FAIL", 
+                                    f"Failed: {result}")
+                else:
+                    self.log_test("Notifications", "Location Suggestions", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Notifications", "Location Suggestions", "FAIL", str(e))
         
-        passed = sum(1 for result in results.values() if result)
-        total = len(results)
+        # Test feedback reminder notification
+        try:
+            feedback_request = {
+                "user_id": self.test_user_id,
+                "stop_name": "Red Fort, Delhi"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/notifications/feedback-reminder", 
+                                       json=feedback_request) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("success"):
+                        self.log_test("Notifications", "Feedback Reminder", "PASS", 
+                                    "Feedback reminder sent")
+                    else:
+                        self.log_test("Notifications", "Feedback Reminder", "FAIL", 
+                                    f"Failed: {result}")
+                else:
+                    self.log_test("Notifications", "Feedback Reminder", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Notifications", "Feedback Reminder", "FAIL", str(e))
+    
+    async def test_user_management(self):
+        """Test user management endpoints"""
+        print("\n👤 Testing User Management...")
         
-        for test_name, result in results.items():
-            status = "✅ PASS" if result else "❌ FAIL"
-            print(f"{status} {test_name.replace('_', ' ').title()}")
+        # Test get user profile
+        try:
+            async with self.session.get(f"{BACKEND_URL}/users/{self.test_user_id}") as response:
+                if response.status == 200:
+                    user = await response.json()
+                    required_fields = ["user_id", "preferences", "stats"]
+                    if all(field in user for field in required_fields):
+                        self.log_test("User Management", "Get User Profile", "PASS", 
+                                    f"User profile retrieved with preferences and stats")
+                    else:
+                        missing = [f for f in required_fields if f not in user]
+                        self.log_test("User Management", "Get User Profile", "FAIL", 
+                                    f"Missing fields: {missing}")
+                else:
+                    self.log_test("User Management", "Get User Profile", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("User Management", "Get User Profile", "FAIL", str(e))
         
-        print()
-        print(f"Overall Result: {passed}/{total} tests passed")
+        # Test update user preferences
+        try:
+            preferences = {
+                "language": "EN",
+                "notifications": True,
+                "privacy": "public",
+                "theme": "light"
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/users/{self.test_user_id}/preferences", 
+                                      json=preferences) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("success"):
+                        self.log_test("User Management", "Update User Preferences", "PASS", 
+                                    "Preferences updated successfully")
+                    else:
+                        self.log_test("User Management", "Update User Preferences", "FAIL", 
+                                    f"Update failed: {result}")
+                else:
+                    self.log_test("User Management", "Update User Preferences", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("User Management", "Update User Preferences", "FAIL", str(e))
+    
+    async def test_analytics_tracking(self):
+        """Test analytics and event tracking"""
+        print("\n📊 Testing Analytics & Tracking...")
         
-        if passed == total:
-            print("🎉 ALL TESTS PASSED! Backend is working correctly.")
+        # Test track event
+        try:
+            event_data = {
+                "user_id": self.test_user_id,
+                "event_name": "reel_viewed",
+                "properties": {
+                    "reel_id": "reel_1",
+                    "location": "Delhi",
+                    "type": "Food",
+                    "duration": 15
+                }
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/analytics/track", 
+                                       json=event_data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("success") and result.get("event_tracked") == "reel_viewed":
+                        self.log_test("Analytics", "Track Event", "PASS", 
+                                    f"Event '{result['event_tracked']}' tracked successfully")
+                    else:
+                        self.log_test("Analytics", "Track Event", "FAIL", 
+                                    f"Tracking failed: {result}")
+                else:
+                    self.log_test("Analytics", "Track Event", "FAIL", 
+                                f"HTTP {response.status}")
+        except Exception as e:
+            self.log_test("Analytics", "Track Event", "FAIL", str(e))
+    
+    def print_summary(self):
+        """Print comprehensive test summary"""
+        print("\n" + "="*80)
+        print("🎯 TORIA BACKEND TESTING SUMMARY")
+        print("="*80)
+        
+        # Group results by category
+        categories = {}
+        for result in self.test_results:
+            category = result["category"]
+            if category not in categories:
+                categories[category] = {"PASS": 0, "FAIL": 0, "SKIP": 0}
+            categories[category][result["status"]] += 1
+        
+        total_tests = len(self.test_results)
+        total_pass = sum(1 for r in self.test_results if r["status"] == "PASS")
+        total_fail = sum(1 for r in self.test_results if r["status"] == "FAIL")
+        
+        print(f"\n📈 OVERALL RESULTS:")
+        print(f"   Total Tests: {total_tests}")
+        print(f"   ✅ Passed: {total_pass}")
+        print(f"   ❌ Failed: {total_fail}")
+        print(f"   📊 Success Rate: {(total_pass/total_tests)*100:.1f}%")
+        
+        print(f"\n📋 RESULTS BY CATEGORY:")
+        for category, stats in categories.items():
+            total_cat = sum(stats.values())
+            pass_rate = (stats["PASS"]/total_cat)*100 if total_cat > 0 else 0
+            print(f"   {category}: {stats['PASS']}/{total_cat} passed ({pass_rate:.1f}%)")
+        
+        # Show failed tests
+        failed_tests = [r for r in self.test_results if r["status"] == "FAIL"]
+        if failed_tests:
+            print(f"\n❌ FAILED TESTS:")
+            for test in failed_tests:
+                print(f"   [{test['category']}] {test['test']}: {test['details']}")
+        
+        print("\n" + "="*80)
+        
+        return total_pass, total_fail, total_tests
+
+async def main():
+    """Run comprehensive backend testing"""
+    print("🚀 Starting Comprehensive Toria Backend Testing...")
+    print(f"🌐 Testing Backend URL: {BACKEND_URL}")
+    
+    async with ToriaBackendTester() as tester:
+        # Run all test categories
+        await tester.test_health_endpoints()
+        await tester.test_reel_discovery()
+        await tester.test_ai_travel_planning()
+        await tester.test_day_plans_management()
+        await tester.test_travel_buddy_chatbot()
+        await tester.test_push_notifications()
+        await tester.test_user_management()
+        await tester.test_analytics_tracking()
+        
+        # Print comprehensive summary
+        passed, failed, total = tester.print_summary()
+        
+        # Return appropriate exit code
+        if failed == 0:
+            print("🎉 All tests passed! Backend is fully functional.")
+            return 0
         else:
-            print("⚠️  Some tests failed. Check the details above.")
-        
-        return results
+            print(f"⚠️  {failed} tests failed. Please review the issues above.")
+            return 1
 
 if __name__ == "__main__":
-    tester = ToriaBackendTester()
-    results = tester.run_all_tests()
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)
