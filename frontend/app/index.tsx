@@ -124,21 +124,30 @@ const ReelCard: React.FC<{
         )}
       </ScrollView>
 
-      {/* Instagram Embed */}
-      <View style={[styles.webViewContainer, { height: webViewHeight }]}>
-        <WebView
-          source={{ html: htmlContent }}
-          style={styles.webView}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          startInLoadingState={true}
-          scalesPageToFit={true}
-          scrollEnabled={false}
-          onMessage={handleWebViewMessage}
-          injectedJavaScript={injectedJavaScript}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
-        />
+      {/* Native Reel Display - Instagram Style */}
+      <View style={styles.reelDisplay}>
+        <View style={styles.reelVideoPlaceholder}>
+          <View style={styles.playIconContainer}>
+            <Ionicons name="play-circle" size={64} color="rgba(255, 255, 255, 0.9)" />
+          </View>
+          <View style={styles.reelOverlay}>
+            <Text style={styles.reelTitleLarge}>{reel.title}</Text>
+            {reel.description && (
+              <Text style={styles.reelDescription} numberOfLines={2}>
+                {reel.description}
+              </Text>
+            )}
+            <View style={styles.reelMetaRow}>
+              <Text style={styles.instagramLink}>
+                <Ionicons name="logo-instagram" size={14} color="#ff6b35" />
+                {' '}View on Instagram
+              </Text>
+              <Text style={styles.reelStats}>
+                {reel.upvotes} likes
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* Actions */}
