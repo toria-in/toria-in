@@ -20,7 +20,7 @@ import Toast from 'react-native-toast-message';
 
 import { fetchReels, upvoteReel, saveReel, trackEvent } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { usePlan } from '../../contexts/PlanContext';
+import { usePlan } from '../contexts/PlanContext';
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from '../../constants/Colors';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
