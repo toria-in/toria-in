@@ -20,7 +20,7 @@ import { useMutation } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 
 import { planMyTrip, getTopPlaces } from '../services/api';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { usePlan } from '../../contexts/PlanContext';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/Colors';
 
