@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, View, Text, Image } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { Colors, Gradients } from '../../constants/Colors';
+import { Colors, Gradients } from '../constants/Colors';
 
 export default function TabsLayout() {
   const { user } = useAuth();
