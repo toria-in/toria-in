@@ -1,12 +1,14 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, View, Text, Image } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { PlanProvider } from '../contexts/PlanContext';
 import { Colors } from '../constants/Colors';
 
-export default function TabsLayout() {
+function TabsLayoutContent() {
   const { user } = useAuth();
+  const params = useLocalSearchParams();
 
   return (
     <Tabs
@@ -201,5 +203,15 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+export default function TabsLayout() {
+  return (
+    <AuthProvider>
+      <PlanProvider>
+        <TabsLayoutContent />
+      </PlanProvider>
+    </AuthProvider>
   );
 }

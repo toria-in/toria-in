@@ -83,27 +83,27 @@ const toastConfig = {
 };
 
 const InitialLayout: React.FC = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const auth = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (auth.loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inTabsGroup = segments[0] === '(tabs)';
 
-    if (!isAuthenticated && !inAuthGroup) {
+    if (!auth.isAuthenticated && !inAuthGroup) {
       // Redirect to login if not authenticated
       router.replace('/(auth)/login');
-    } else if (isAuthenticated && inAuthGroup) {
+    } else if (auth.isAuthenticated && inAuthGroup) {
       // Redirect to main app if authenticated
       router.replace('/(tabs)');
-    } else if (!inAuthGroup && !inTabsGroup && isAuthenticated) {
+    } else if (!inAuthGroup && !inTabsGroup && auth.isAuthenticated) {
       // Handle other authenticated routes
       return;
     }
-  }, [isAuthenticated, loading, segments]);
+  }, [auth.isAuthenticated, auth.loading, segments]);
 
   return (
     <>

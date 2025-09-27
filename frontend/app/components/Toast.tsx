@@ -59,3 +59,8 @@ export const toastConfig = {
     />
   ),
 };
+
+// Add a default export to satisfy Expo Router's requirement
+export default function ToastConfig() {
+  return null; // This component doesn't render anything directly
+}

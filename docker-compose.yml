@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "19000:19000"
+      - "19001:19001"
+      - "19002:19002"
+      - "8081:8081"
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_NATIVE_PACKAGER_HOSTNAME=localhost
+      - EXPO_PUBLIC_BACKEND_URL=http://localhost:8001
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - toria-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - MONGO_URL=mongodb://host.docker.internal:27017
+      - PYTHONUNBUFFERED=1
+      - EMERGENT_LLM_KEY=sk-emergent-2D0F2Cf6c81AfC8167
+    volumes:
+      - ./backend:/app
+    networks:
+      - toria-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  toria-network:
+    driver: bridge
+
+volumes:
+  mongo_data:

@@ -1,0 +1,210 @@
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+
+// Mock Firebase authentication for development
+// In a real app, you would import firebase/auth here
+// import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from '@react-native-firebase/auth';
+
+interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string) => Promise<void>;
+  logout: () => Promise<void>;
+  updateProfile: (data: Partial<User>) => Promise<void>;
+}
+
+// Create the auth context
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Mock user data for development
+const MOCK_USERS = [
+  {
+    email: 'user@example.com',
+    password: 'password123',
+    uid: '123456',
+    displayName: 'Test User',
+    photoURL: 'https://ui-avatars.com/api/?name=Test+User',
+  },
+];
+
+// Provider component that wraps app and makes auth available
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Check if user is logged in when the component mounts
+  useEffect(() => {
+    const loadStoredUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem('@auth_user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (error) {
+        console.error('Failed to load stored user', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStoredUser();
+  }, []);
+
+  // Mock sign in function
+  const signIn = async (email: string, password: string) => {
+    try {
+      setLoading(true);
+
+      // In a real app, this would be:
+      // const auth = getAuth();
+      // const result = await signInWithEmailAndPassword(auth, email, password);
+      // const user = result.user;
+
+      // Mock authentication
+      const mockUser = MOCK_USERS.find(u => u.email === email && u.password === password);
+
+      if (!mockUser) {
+        throw new Error('Invalid email or password');
+      }
+
+      const authenticatedUser = {
+        uid: mockUser.uid,
+        email: mockUser.email,
+        displayName: mockUser.displayName,
+        photoURL: mockUser.photoURL,
+      };
+
+      // Store user in state and AsyncStorage
+      setUser(authenticatedUser);
+      await AsyncStorage.setItem('@auth_user', JSON.stringify(authenticatedUser));
+
+      // Navigate to main app
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      console.error('Sign in error:', error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mock sign up function
+  const signUp = async (email: string, password: string, name: string) => {
+    try {
+      setLoading(true);
+
+      // In a real app, this would be:
+      // const auth = getAuth();
+      // const result = await createUserWithEmailAndPassword(auth, email, password);
+      // await result.user.updateProfile({ displayName: name });
+      // const user = result.user;
+
+      // Mock user creation
+      const newUser = {
+        uid: `user_${Date.now()}`,
+        email: email,
+        displayName: name,
+        photoURL: `https://ui-avatars.com/api/?name=${name.replace(' ', '+')}`,
+      };
+
+      // Store user in state and AsyncStorage
+      setUser(newUser);
+      await AsyncStorage.setItem('@auth_user', JSON.stringify(newUser));
+
+      // Navigate to main app
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      console.error('Sign up error:', error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mock logout function
+  const logout = async () => {
+    try {
+      setLoading(true);
+
+      // In a real app, this would be:
+      // const auth = getAuth();
+      // await signOut(auth);
+
+      // Clear user from state and AsyncStorage
+      setUser(null);
+      await AsyncStorage.removeItem('@auth_user');
+
+      // Navigate to auth screen
+      router.replace('/(auth)');
+    } catch (error: any) {
+      console.error('Logout error:', error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mock update profile function
+  const updateProfile = async (data: Partial<User>) => {
+    try {
+      setLoading(true);
+
+      if (!user) {
+        throw new Error('No user logged in');
+      }
+
+      // In a real app, this would update Firebase profile
+      // const auth = getAuth();
+      // await auth.currentUser.updateProfile({
+      //   displayName: data.displayName || user.displayName,
+      //   photoURL: data.photoURL || user.photoURL,
+      // });
+
+      // Update local user data
+      const updatedUser = {
+        ...user,
+        ...data,
+      };
+
+      setUser(updatedUser);
+      await AsyncStorage.setItem('@auth_user', JSON.stringify(updatedUser));
+    } catch (error: any) {
+      console.error('Update profile error:', error.message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // The value provided to consumers of this context
+  const value = {
+    user,
+    loading,
+    signIn,
+    signUp,
+    logout,
+    updateProfile,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+// Custom hook to use the auth context
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+
+  return context;
+};
